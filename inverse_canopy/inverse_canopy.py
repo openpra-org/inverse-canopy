@@ -1,56 +1,137 @@
+import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorflow.keras.constraints import NonNeg
-from .params import ModelInputs, TrainableParams, ModelParams, ModelOutputs
+from .params import ModelInputs, TrainableParams, ModelParams
 
 
-class ProbabilityModel(tf.Module):
-    def __init__(self, initial_guess: ModelInputs, trainable_mask: TrainableParams, constraints: ModelInputs,
-                 dtype=tf.float64):
+def initialize_conditional_events(events, dtype):
+    bounds: ModelInputs = ModelInputs()
+    bounds['means'] = tf.constant([events['bounds']['mean']['min'], events['bounds']['mean']['max']], dtype=dtype)
+    bounds['stds'] = tf.constant([events['bounds']['std']['min'], events['bounds']['std']['max']], dtype=dtype)
+
+    num_events = len(events['names'])
+    initial: ModelInputs = ModelInputs()
+    initial['means'] = tf.constant([events['initial']['mean'] for _ in range(0, num_events)], dtype=dtype)
+    initial['stds'] = tf.constant([events['initial']['std'] for _ in range(0, num_events)], dtype=dtype)
+
+    mask: TrainableParams = TrainableParams()
+    mask['mus'] = tf.constant([1 for _ in range(0, num_events)], dtype=dtype)
+    mask['sigmas'] = tf.constant([1 for _ in range(0, num_events)], dtype=dtype)
+
+    return bounds, initial, mask
+
+
+def initialize_end_states(end_states, num_samples, dtype):
+    probabilities = tf.constant(np.array([details['probability'] for details in end_states.values()]), dtype=dtype)
+    assert np.isclose(probabilities.numpy().sum(), 1.0, atol=1e-8), "Probabilities must sum to 1."
+    end_state_pdf = tf.tile(tf.reshape(probabilities, (probabilities.shape[0], 1)), [1, num_samples])
+    event_sequences = tf.constant(np.array([details['sequence'] for details in end_states.values()]), dtype=dtype)
+    return end_state_pdf, event_sequences
+
+
+class InverseCanopy(tf.Module):
+    def __init__(self, conditional_events, end_states, tunable):
+
+        # , initial_guess: ModelInputs, trainable_mask: TrainableParams, constraints: ModelInputs,
+        #          dtype=tf.float64, epsilon=1e-30, num_samples=100):
         super().__init__()
+
+        self.dtype = tunable['dtype']
+        self.epsilon = tf.constant(tunable['epsilon'], dtype=self.dtype)
+        self.num_samples = tunable['num_samples']
+
+        tf.keras.backend.set_floatx(str.lower(self.dtype.name.title()))
+        tf.keras.backend.set_epsilon(self.epsilon)
+        tf.config.experimental.enable_tensor_float_32_execution(False)
+        tf.print(f"tunables initialized: dtype={self.dtype}, epsilon={self.epsilon}")
+
+        # initialize conditional events related parameters
+        self.conditional_events = conditional_events
+        bounds, initial_guess, trainable_mask = initialize_conditional_events(self.conditional_events, self.dtype)
+        self.num_conditional_events = len(self.conditional_events['names'])
 
         # initialize internal model params
         self.params: ModelParams = initial_guess.to_musigma()
-        self.params['mus'] = tf.Variable(self.params['mus'], dtype=dtype)
-        self.params['sigmas'] = tf.Variable(self.params['sigmas'], dtype=dtype, constraint=NonNeg())
+        self.params['mus'] = tf.Variable(self.params['mus'], dtype=self.dtype)
+        self.params['sigmas'] = tf.Variable(self.params['sigmas'], dtype=self.dtype, constraint=NonNeg())
 
         # set the trainable boolean masks
         self.trainable: TrainableParams = trainable_mask
-        self.trainable['mus'] = tf.constant(self.trainable['mus'], dtype)
-        self.trainable['sigmas'] = tf.constant(self.trainable['sigmas'], dtype)
+        self.trainable['mus'] = tf.constant(self.trainable['mus'], dtype=self.dtype)
+        self.trainable['sigmas'] = tf.constant(self.trainable['sigmas'], dtype=self.dtype)
 
         # clipping constraints on mean, std
-        self.constraints = constraints
-        self.constraints['means'] = tf.constant(self.constraints['means'], dtype)
-        self.constraints['stds'] = tf.constant(self.constraints['stds'], dtype)
+        self.constraints = bounds
+        self.constraints['means'] = tf.constant(self.constraints['means'], dtype=self.dtype)
+        self.constraints['stds'] = tf.constant(self.constraints['stds'], dtype=self.dtype)
 
-        tf.print('params', self.params['mus'], self.params['sigmas'])
+        tf.print('params: ', self.params['mus'], self.params['sigmas'])
         tf.print('mask', self.trainable['mus'], self.trainable['sigmas'])
         tf.print('constraints', self.constraints['means'], self.constraints['stds'])
 
-    @staticmethod
-    @tf.function
-    def sample_from_distribution(mus, sigmas, num_samples, low=0.0, high=1.0, epsilon=1e-30, dtype=tf.float64):
-        low = tf.cast(low, dtype)
-        high = tf.cast(high, dtype)
-        low_normal = tf.math.log(low + epsilon)  # A small number close to 0
-        high_normal = tf.math.log(high)  # Log(1) = 0
+        # initialize end states related parameters
+        self.end_states = end_states
+        self.num_end_states = len(self.end_states)
 
-        # @tf.function
-        def sample_single(mu_sigma):
-            # tf.print("loc:", mu_sigma[0], "scale:", mu_sigma[1], "low:", low_normal, "high:", high_normal)
-            truncated = tfp.distributions.TruncatedNormal(loc=mu_sigma[0], scale=(mu_sigma[1] + epsilon),
-                                                          low=low_normal, high=high_normal)
-            return tf.exp(truncated.sample(num_samples))
+        # declare created methods
+        self.compute_mu_sigma_from_sampled_distributions = self._create_compute_mu_sigma_from_sampled_distributions()
 
-        # Stack 'mus' and 'sigmas' along a new axis to create pairs
-        mus_sigmas = tf.stack([mus, sigmas], axis=1)
+        target_pdf, target_sequences = initialize_end_states(self.end_states, self.num_samples, self.dtype)
+        target_log_pdf, target_mus, target_sigmas = self.compute_mu_sigma_from_sampled_distributions(target_pdf)
 
-        # Use 'tf.map_fn' to apply 'sample_single' across all 'mu_sigma' pairs
-        samples = tf.map_fn(sample_single, mus_sigmas, fn_output_signature=dtype)
+        self.targets = {
+            'pdf': target_pdf,
+            'sequences': target_sequences,
+            'log_pdf': target_log_pdf,
+            'mus': target_mus,
+            'sigmas': target_sigmas
+        }
 
-        # Transpose the samples to adjust the shape if necessary
-        return tf.transpose(samples)
+        #tf.print(self.targets['pdf'].shape)
+        self.mae_loss = self._create_mae_loss()
+        self.normalized_relative_logarithmic_error = self._create_normalized_relative_logarithmic_error()
+        self.normalized_relative_logarithmic_loss = self._create_normalized_relative_logarithmic_loss()
+        self.predict_end_state_likelihoods = self._create_predict_end_state_likelihoods()
+        self.compute_y = self._create_compute_y()
+        self.sample_from_distribution = self._create_sample_from_distribution()
+
+    def _create_sample_from_distribution(self):
+
+        num_samples = self.num_samples
+        dtype = self.dtype
+        epsilon = self.epsilon
+
+        # input_signature = [
+        #     tf.TensorSpec(shape=[1, 2], dtype=self.dtype),
+        # ]
+
+        input_signature = [
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+        ]
+
+        p_low = tf.math.log(tf.cast(0.0, dtype=dtype) + epsilon)
+        p_high = tf.math.log(tf.cast(1.0, dtype=dtype))
+
+        @tf.function(input_signature=input_signature)
+        def sample_from_distribution(mus, sigmas):
+            def sample_single(mu_sigma):
+                #tf.print("loc:", mu_sigma[0], "scale:", mu_sigma[1], "low:", p_low, "high:", p_high)
+                truncated = tfp.distributions.TruncatedNormal(loc=mu_sigma[0], scale=(mu_sigma[1] + epsilon),
+                                                              low=p_low, high=p_high)
+                return tf.exp(truncated.sample(num_samples))
+
+            # Stack 'mus' and 'sigmas' along a new axis to create pairs
+            mus_sigmas = tf.stack([mus, sigmas], axis=1)
+
+            # Use 'tf.map_fn' to apply 'sample_single' across all 'mu_sigma' pairs
+            samples = tf.map_fn(sample_single, mus_sigmas, fn_output_signature=dtype)
+
+            # Transpose the samples to adjust the shape if necessary
+            return tf.transpose(samples)
+
+        return sample_from_distribution
 
     @staticmethod
     @tf.function
@@ -89,101 +170,116 @@ class ProbabilityModel(tf.Module):
         - A TensorFlow tensor containing the computed samples for the given combination.
         """
         states_tensor = tf.constant(states, dtype=dtype)
-        return ProbabilityModel.SequenceTF(sampled_vars, states_tensor)
+        return InverseCanopy.SequenceTF(sampled_vars, states_tensor)
 
-    @staticmethod
-    @tf.function
-    def compute_Y(sampled_vars, sequences, dtype=tf.float64):
-        # Convert sequences list to a tensor if it's not already one
-        sequences_tensor = tf.convert_to_tensor(sequences, dtype=dtype)
+    def _create_compute_y(self):
+        y_sequences = self.targets['sequences']
+        dtype = self.dtype
+        input_signature = [
+            tf.TensorSpec(shape=[self.num_samples, self.num_conditional_events], dtype=self.dtype,
+                          name="sampled_conditional_probabilities"),
+        ]
 
-        # Define a vectorized function to apply to each sequence
-        def apply_sequence(seq):
-            return ProbabilityModel.SequenceTF(sampled_vars, seq)
+        @tf.function(input_signature=input_signature)
+        def compute_y(sampled_vars):
+            # Define a vectorized function to apply to each sequence
+            def apply_sequence(seq):
+                return InverseCanopy.SequenceTF(sampled_vars, seq)
 
-        # Apply the vectorized function to each sequence
-        y = tf.map_fn(apply_sequence, sequences_tensor, fn_output_signature=dtype)
-        y = tf.clip_by_value(y, clip_value_min=0.0, clip_value_max=1.0)
-        return y
+            # Apply the vectorized function to each sequence
+            y = tf.map_fn(apply_sequence, y_sequences, fn_output_signature=dtype)
+            y = tf.clip_by_value(y, clip_value_min=0.0, clip_value_max=1.0)
+            return y
 
-    @staticmethod
-    @tf.function
-    def compute_mu_sigma_from_sampled_distributions(y_dists, axis=1, epsilon=1e-30):
-        log_y = tf.math.log(y_dists + epsilon)
-        mus = tf.math.reduce_mean(log_y, axis=axis)
-        sigmas = tf.math.reduce_std(log_y, axis=axis)
-        return log_y, mus, sigmas
+        return compute_y
 
-    @staticmethod
-    @tf.function
-    def predict_end_state_likelihoods(mus, sigmas, y_sequences, num_samples=100000) -> ModelOutputs:
-        predicted_samples = ProbabilityModel.sample_from_distribution(mus, sigmas, num_samples)
-        y_pred_pdf = ProbabilityModel.compute_Y(predicted_samples, y_sequences)
-        return y_pred_pdf
+    def _create_compute_mu_sigma_from_sampled_distributions(self):
 
-    @staticmethod
-    @tf.function
-    def mae_loss(y_true, y_pred, axis=1):
-        loss = tf.reduce_mean(tf.abs(y_true - y_pred))
-        return loss
+        input_signature = tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype),
 
-    @staticmethod
-    @tf.function
-    def normalized_relative_logarithmic_error(y_true, y_pred):
-        # Compute the logarithm of the distribution
-        log_y_true, mu_y_true, sigma_y_true = ProbabilityModel.compute_mu_sigma_from_sampled_distributions(y_true)
-        log_y_pred, mu_y_pred, sigma_y_pred = ProbabilityModel.compute_mu_sigma_from_sampled_distributions(y_pred)
+        @tf.function(input_signature=input_signature)
+        def compute_mu_sigma_from_sampled_distributions(y_dists):
+            log_y = tf.math.log(y_dists + 1e-30)
+            mus = tf.math.reduce_mean(log_y, axis=1)
+            sigmas = tf.math.reduce_std(log_y, axis=1)
+            return log_y, mus, sigmas
 
-        pdf_loss = ProbabilityModel.mae_loss(log_y_true, log_y_pred)
-        mu_loss = ProbabilityModel.mae_loss(mu_y_true, mu_y_pred)
-        sigma_loss = ProbabilityModel.mae_loss(sigma_y_true, sigma_y_pred)
+        return compute_mu_sigma_from_sampled_distributions
 
-        combined_loss = pdf_loss + mu_loss + sigma_loss
-        return combined_loss
+    def _create_predict_end_state_likelihoods(self):
 
-    @staticmethod
-    @tf.function
-    def rmsle(y_true, y_pred, epsilon=1e-30):
-        """
-        Root Mean Squared Logarithmic Error (RMSLE) loss function.
+        input_signature = [
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+        ]
 
-        Args:
-        - y_true: TensorFlow tensor containing the true values.
-        - y_pred: TensorFlow tensor containing the predicted values.
-        - epsilon_value: A small value to ensure numerical stability.
+        @tf.function(input_signature=input_signature)
+        def predict_end_state_likelihoods(mus, sigmas):
+            predicted_samples = self.sample_from_distribution(mus, sigmas)  # num_samples
+            y_pred_pdf = self.compute_y(predicted_samples)  # y_sequences
+            return y_pred_pdf
 
-        Returns:
-        - A tensor containing the computed RMSLE.
-        """
-        # Compute the logarithm of y_true and y_pred, adding epsilon to avoid log(0)
-        log_y_true = tf.math.log(y_true + epsilon)
-        log_y_pred = tf.math.log(y_pred + epsilon)
+        return predict_end_state_likelihoods
 
-        # Compute the squared difference between the logarithms
-        squared_log_error = tf.square(log_y_true - log_y_pred)
+    def _create_mae_loss(self):
 
-        # Compute the mean of the squared log errors
-        mean_squared_log_error = tf.reduce_mean(squared_log_error)
+        input_signature = [
+            tf.TensorSpec(shape=(self.num_end_states, self.num_samples), dtype=self.dtype),
+            tf.TensorSpec(shape=(self.num_end_states, self.num_samples), dtype=self.dtype),
+        ]
 
-        # Return the square root of the mean squared log error
-        return tf.sqrt(mean_squared_log_error)
+        @tf.function(input_signature=input_signature)
+        def mae_loss(y_true, y_pred):
+            # tf.print('mae_loss', y_true.shape, y_pred.shape)
+            loss = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
+            return loss
 
-    @staticmethod
-    @tf.function
-    def variance_loss(y_true_std, y_pred_std):
-        return tf.reduce_mean(tf.square(y_true_std - y_pred_std))
+        return mae_loss
 
-    @tf.function
-    def normalized_relative_logarithmic_loss(self, y_observed_pdf, y_sequences, num_samples):
-        mus, sigmas = self.params.spread()
-        y_pred_pdf = self.predict_end_state_likelihoods(mus, sigmas, y_sequences, num_samples)
-        nrle = ProbabilityModel.normalized_relative_logarithmic_error(y_pred_pdf, y_observed_pdf)
-        return nrle, y_pred_pdf
+    def _create_normalized_relative_logarithmic_error(self):
 
-    @tf.function
-    def optimization_step(self, y_observed_pdf, y_sequences, optimizer, num_samples, epsilon=1e-30, dtype=tf.float64):
+        log_y_true = self.targets['log_pdf']
+        mu_y_true = self.targets['mus']
+        sigma_y_true = self.targets['sigmas']
+
+        input_signature = [
+            tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype),
+        ]
+
+        @tf.function(input_signature=input_signature)
+        def normalized_relative_logarithmic_error(y_pred):
+            log_y_pred, mu_y_pred, sigma_y_pred = self.compute_mu_sigma_from_sampled_distributions(y_pred)
+            pdf_loss = tf.reduce_mean(self.mae_loss(log_y_true, log_y_pred))
+            mu_loss = tf.reduce_mean(tf.abs(mu_y_true - mu_y_pred), axis=0)
+            sigma_loss = tf.reduce_mean(tf.abs(sigma_y_true - sigma_y_pred), axis=0)
+
+            # tf.print('pdf_loss', pdf_loss.shape, pdf_loss)
+            # tf.print('mu_loss', mu_loss.shape, mu_loss)
+            # tf.print('sigma_loss', sigma_loss.shape, sigma_loss)
+            return pdf_loss + mu_loss + sigma_loss
+
+        return normalized_relative_logarithmic_error
+
+    def _create_normalized_relative_logarithmic_loss(self):
+
+        input_signature = [
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+        ]
+
+        @tf.function(input_signature=input_signature)
+        def normalized_relative_logarithmic_loss(mus, sigmas):
+            # tf.print(mus, sigmas, y_sequences)
+            y_pred_pdf = self.predict_end_state_likelihoods(mus, sigmas)
+            nrle = self.normalized_relative_logarithmic_error(y_pred_pdf)
+            return nrle
+
+        return normalized_relative_logarithmic_loss
+
+    def optimization_step(self, optimizer):
         with tf.GradientTape() as tape:
-            loss, y_pred_pdf = self.normalized_relative_logarithmic_loss(y_observed_pdf, y_sequences, num_samples)
+            mus, sigmas = self.params.spread()
+            loss = self.normalized_relative_logarithmic_loss(mus, sigmas)
 
         # Compute gradients with respect to model parameters that are variables
         gradients = tape.gradient(loss, [self.params['mus'], self.params['sigmas']])
@@ -219,26 +315,41 @@ class ProbabilityModel(tf.Module):
         self.params['mus'].assign(constrained_mus_sigmas['mus'])
         self.params['sigmas'].assign(constrained_mus_sigmas['sigmas'])
 
-        tf.print(self.params['mus'], self.params['sigmas'])
-        self.params['mus'].assign(tf.minimum(self.params['mus'], -epsilon))
-        self.params['mus'].assign(tf.maximum(self.params['mus'], tf.cast(-50, dtype=dtype)))
-        self.params['sigmas'].assign(tf.minimum(self.params['sigmas'], tf.cast(6, dtype=dtype)))
-        self.params['sigmas'].assign(tf.maximum(self.params['sigmas'], epsilon))
+        #tf.print(self.params['mus'], self.params['sigmas'])
+        self.params['mus'].assign(tf.minimum(self.params['mus'], -self.epsilon))
+        self.params['mus'].assign(tf.maximum(self.params['mus'], tf.cast(-50, dtype=self.dtype)))
+        self.params['sigmas'].assign(tf.minimum(self.params['sigmas'], tf.cast(6, dtype=self.dtype)))
+        self.params['sigmas'].assign(tf.maximum(self.params['sigmas'], self.epsilon))
 
-        return loss, y_pred_pdf, gradients
+        # tf.debugging.check_numerics(self.params['mus'], "mus has NaNs")
+        # tf.debugging.check_numerics(self.params['sigmas'], "sigmas has NaNs")
 
-    def train_model(self, y_observed_pdf, y_sequences, optimizer, steps=100,
-                    num_samples=10000, convergence_threshold=1e-10, max_steps=None):
+        self.params['mus'].assign(tf.where(tf.math.is_nan(self.params['mus']), tf.fill(self.params['sigmas'].shape, self.epsilon), self.params['mus']))
+        self.params['sigmas'].assign(tf.where(tf.math.is_nan(self.params['sigmas']), tf.fill(self.params['sigmas'].shape, self.epsilon), self.params['sigmas']))
+        return loss
 
+    """
+    end-user helper function
+    """
+
+    def fit(self, learning_rate=0.1, convergence_threshold=0.48, steps=1000):
+        tf.print(f"learning_rate: {learning_rate}\n"
+                 f"convergence_threshold: {convergence_threshold}\n"
+                 f"max_steps: {steps}")
+
+        optimizer = tf.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
+        return self.train_model(optimizer=optimizer, convergence_threshold=convergence_threshold, steps=steps)
+
+    def train_model(self, optimizer, steps=1000, convergence_threshold=1e-10):
         for step in range(steps):
-            loss, y_pred_pdf, gradients = self.optimization_step(y_observed_pdf, y_sequences, optimizer, num_samples)
+            loss = self.optimization_step(optimizer)
 
             if step % 100 == 0:
                 # Print the losses along with the step number
                 print(f"Step {step}: Loss = {loss.numpy():.16f}\n"
                       f"Mean-Std\n{self.params.to_meanstd()}")
 
-            if loss.numpy() <= convergence_threshold or (max_steps is not None and step >= max_steps):
+            if loss.numpy() <= convergence_threshold:
                 print(f"Stopping training at step {step} as loss reached the threshold of {convergence_threshold:.4e}")
                 print(f"Step {step}: Loss = {loss.numpy():.16f}\n"
                       f"Mean-Std\n{self.params.to_meanstd()}")

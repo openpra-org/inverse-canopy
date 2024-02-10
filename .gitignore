@@ -7,3 +7,9 @@ config.ini
 env
 venv
 build
+*.ipynb
+*.whl
+*.tar.*
+scripts/
+.ipynb_checkpoints
+dist

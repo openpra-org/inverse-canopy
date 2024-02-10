@@ -5,11 +5,11 @@ with open('README.md') as f:
 
 setup(
     name='inverse-canopy',
-    url='ssh://git@git.space.openpra.org:2222/openpra/inverse-canopy.git',
-    version='0.0.1',
+    url='https://git@git.space.openpra.org/openpra/inverse-canopy.git',
+    version='0.0.2',
     author='Arjun Earthperson',
     author_email='arjun@openpra.org',
-    license='MIT',
+    license='AGPL3',
     description='',
     long_description=README,
     install_requires=[
@@ -27,8 +27,8 @@ setup(
     ],
     python_requires='>=3.6',
     entry_points={
-        'console_scripts': [
-            'inverse-canopy=inverse-canopy:main',
-        ],
+        # 'console_scripts': [
+        #     'inverse-canopy=inverse_canopy:main',
+        # ],
     },
 )

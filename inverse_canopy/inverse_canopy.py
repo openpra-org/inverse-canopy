@@ -332,10 +332,14 @@ class InverseCanopy(tf.Module):
     end-user helper function
     """
 
-    def fit(self, learning_rate=0.1, convergence_threshold=0.48, steps=1000):
+    def fit(self, learning_rate=0.1, convergence_threshold=0.48, steps=1000, seed=372):
         tf.print(f"learning_rate: {learning_rate}\n"
                  f"convergence_threshold: {convergence_threshold}\n"
-                 f"max_steps: {steps}")
+                 f"max_steps: {steps}\n"
+                 f"seed: {seed}")
+
+        tf.random.set_seed(seed)
+        np.random.seed(seed)
 
         optimizer = tf.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
         return self.train_model(optimizer=optimizer, convergence_threshold=convergence_threshold, steps=steps)

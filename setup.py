@@ -11,6 +11,7 @@ setup(
     author_email='arjun@openpra.org',
     license='AGPL3',
     description='',
+    long_description_content_type='text/markdown',
     long_description=README,
     install_requires=[
         'tensorflow==2.15.0',

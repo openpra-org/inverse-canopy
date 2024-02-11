@@ -1,7 +1,7 @@
 # InverseCanopy
 
-This is a guide on how to use the `inverse-canopy` package. This package helps you back-fit the probability 
-distributions of conditional/functional events in an event tree as long as the end-state probabilities are known.
+Back-fit conditional/functional event probability distributions in an event tree to match target end-state
+frequencies.
 
 ## How to Use
 

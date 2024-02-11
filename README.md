@@ -182,7 +182,7 @@ DHRL|~DHRS|~SPTR  4.99e-01  4.99e-01  4.99e-01
 ```jupyterpython
 model.summarize(show_plot=True, show_metrics=False)
 ```
-<img src="https://gcdnb.pbrd.co/images/DDj4Nv536IJh.png?o=1" alt="demo output plot" />
+![output](https://gcdnb.pbrd.co/images/DDj4Nv536IJh.png?o=1 "demo output plot")
 
 ## Upload to PyPI
 

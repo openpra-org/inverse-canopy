@@ -23,7 +23,7 @@ You'll need to set up some parameters for the model to work with. These include 
 
 ```python
 tunable = {
- 'num_samples': 10000,    # Number of Monte Carlo samples
+ 'num_samples': 100,    # Number of Monte Carlo samples
  'learning_rate': 0.1,    # Learning rate for gradient updates
  'dtype': tf.float64,     # Use 64-bit floats for calculations
  'epsilon': 1e-30,        # Helps avoid log(0) errors

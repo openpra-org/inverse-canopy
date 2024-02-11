@@ -14,8 +14,9 @@ setup(
     long_description_content_type='text/markdown',
     long_description=README,
     install_requires=[
-        'tensorflow==2.15.0',
-        'tensorflow-probability==0.23.0',
+        'tensorflow==2.13.1',
+        'tensorflow-metal==1.0.0',
+        'tensorflow-probability==0.21.0',
         'numpy',
         'scipy',
         'matplotlib'

@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -6,6 +7,7 @@ from tensorflow.keras.constraints import NonNeg
 from .params import ModelInputs, TrainableParams, ModelParams
 from .early_stop import EarlyStop
 from .metrics import summarize_predicted_end_states, summarize_predicted_conditional_events
+
 
 
 def initialize_conditional_events(events, dtype):
@@ -91,6 +93,9 @@ class InverseCanopy(tf.Module):
         self.predict_end_state_likelihoods = self._create_predict_end_state_likelihoods()
         self.compute_y = self._create_compute_y()
         self.sample_from_distribution = self._create_sample_from_distribution()
+        self.compute_mu_sigma = self._create_compute_mu_sigma()
+        self.compute_mean_std = self._create_compute_mean_std()
+        self.clip_mu_sigma = self._create_clip_mu_sigma()
 
     def _create_sample_from_distribution(self):
 
@@ -108,63 +113,15 @@ class InverseCanopy(tf.Module):
 
         @tf.function(input_signature=input_signature)
         def sample_from_distribution(mus, sigmas):
-            def sample_single(mu_sigma):
-                truncated = tfp.distributions.TruncatedNormal(loc=mu_sigma[0], scale=(mu_sigma[1] + epsilon),
-                                                              low=p_low, high=p_high)
-                return tf.exp(truncated.sample(num_samples))
-
-            # Stack 'mus' and 'sigmas' along a new axis to create pairs
-            mus_sigmas = tf.stack([mus, sigmas], axis=1)
-
-            # Use 'tf.map_fn' to apply 'sample_single' across all 'mu_sigma' pairs
-            samples = tf.map_fn(sample_single, mus_sigmas, fn_output_signature=dtype)
-
-            # Transpose the samples to adjust the shape if necessary
-            return tf.transpose(samples)
+            sigmas_with_epsilon = sigmas + epsilon
+            truncated_dist = tfp.distributions.TruncatedNormal(loc=mus, scale=sigmas_with_epsilon, low=p_low,
+                                                               high=p_high)
+            return tf.exp(truncated_dist.sample(num_samples))
 
         return sample_from_distribution
 
-    @staticmethod
-    @tf.function
-    def sequence_tf(sampled_vars, states_tensor):
-        # Create a mask for non-NaN values (events to include)
-        mask = tf.math.logical_not(tf.math.is_nan(states_tensor))
-
-        # Replace NaN in states_tensor with 1 to have no effect when multiplying
-        states_tensor = tf.where(mask, states_tensor, tf.ones_like(states_tensor))
-
-        # Compute the product for each sample
-        # For occurrence (1), use the sampled value; for non-occurrence (0), use 1 - the sampled value
-        combination_samples = tf.reduce_prod(
-            tf.where(tf.cast(mask, tf.bool),
-                     tf.where(tf.cast(states_tensor, tf.bool), sampled_vars, 1 - sampled_vars),
-                     tf.ones_like(sampled_vars)),
-            axis=1
-        )
-
-        return tf.clip_by_value(combination_samples, clip_value_min=0.0, clip_value_max=1.0)
-
-    @tf.function
-    def sequence(self, sampled_vars, states):
-        """
-        Compute the combination of sampled variables based on the given states.
-        The states vector specifies the desired state for each variable:
-        1 for occurrence, 0 for non-occurrence, and None to ignore the event.
-
-        Args:
-        - sampled_vars: A TensorFlow tensor of shape (num_samples, num_vars) containing sampled values.
-        - states: A list where each element is 1 if the event occurred, 0 if the event did not occur,
-                  and None if the event should be ignored.
-
-        Returns:
-        - A TensorFlow tensor containing the computed samples for the given combination.
-        """
-        states_tensor = tf.constant(states, dtype=self.dtype)
-        return InverseCanopy.sequence_tf(sampled_vars, states_tensor)
-
     def _create_compute_y(self):
         y_sequences = self.targets['sequences']
-        dtype = self.dtype
         input_signature = [
             tf.TensorSpec(shape=[self.num_samples, self.num_conditional_events], dtype=self.dtype,
                           name="sampled_conditional_probabilities"),
@@ -172,14 +129,21 @@ class InverseCanopy(tf.Module):
 
         @tf.function(input_signature=input_signature)
         def compute_y(sampled_vars):
-            # Define a vectorized function to apply to each sequence
-            def apply_sequence(seq):
-                return InverseCanopy.sequence_tf(sampled_vars, seq)
+            # Expand dimensions of `sampled_vars` for broadcasting
+            expanded_sampled_vars = tf.expand_dims(sampled_vars, axis=1)  # Shape:[num_samples,1,num_conditional_events]
+            occurrence_mask = tf.equal(y_sequences, 1)  # Event occurred
+            non_occurrence_mask = tf.equal(y_sequences, 0)  # Event did not occur
 
-            # Apply the vectorized function to each sequence
-            y = tf.map_fn(apply_sequence, y_sequences, fn_output_signature=dtype)
-            y = tf.clip_by_value(y, clip_value_min=0.0, clip_value_max=1.0)
-            return y
+            # Apply masks
+            # For occurrence, use sampled_vars
+            # For non-occurrence, use 1 - sampled_vars
+            # For 'ignore' (-1), use 1 to have no effect
+            sampled_occurrence = tf.where(occurrence_mask, expanded_sampled_vars, 1)
+            sampled_non_occurrence = tf.where(non_occurrence_mask, 1 - expanded_sampled_vars, sampled_occurrence)
+
+            # Compute the product across the conditional events dimension
+            y_combined = tf.reduce_prod(sampled_non_occurrence, axis=-1)  # shape [11, 2]
+            return tf.transpose(y_combined)  # shape [2, 11]
 
         return compute_y
 
@@ -260,6 +224,77 @@ class InverseCanopy(tf.Module):
 
         return normalized_relative_logarithmic_loss
 
+    def _create_compute_mu_sigma(self):
+
+        one = tf.cast(1.0, dtype=self.dtype)
+
+        input_signature = [
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
+        ]
+
+        @tf.function(input_signature=input_signature)
+        def compute_mu_sigma(mean, std):
+            mean_squared = tf.square(mean)
+            std_squared = tf.square(std)
+            mu = tf.math.log(mean_squared / tf.sqrt(std_squared + mean_squared))
+            sigma = tf.sqrt(tf.math.log(one + std_squared / mean_squared))
+            return mu, sigma
+
+        return compute_mu_sigma
+
+    def _create_compute_mean_std(self):
+        one = tf.cast(1.0, dtype=self.dtype)
+        two = tf.cast(2.0, dtype=self.dtype)
+
+        input_signature = [
+            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
+            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
+        ]
+
+        @tf.function(input_signature=input_signature)
+        def compute_mean_std(mu, sigma):
+            sigma_squared = tf.square(sigma)
+            mean = tf.exp(mu + sigma_squared / two)
+            std = tf.sqrt((tf.exp(sigma_squared) - one) * tf.exp(two * mu + sigma_squared))
+            return mean, std
+
+        return compute_mean_std
+
+    def _create_clip_mu_sigma(self):
+        input_signature = [
+            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
+            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
+        ]
+
+        constraints_mean = self.constraints['means']
+        constraints_std = self.constraints['stds']
+        dtype = self.dtype
+        epsilon = self.epsilon
+        neg_fifty = tf.cast(-50, dtype=dtype)
+        six = tf.cast(6, dtype=dtype)
+        @tf.function(input_signature=input_signature)
+        def clip_mu_sigma(mu, sigma):
+            # Convert mu, sigma to mean, std and apply constraints
+            mean, std = self.compute_mean_std(mu, sigma)
+            mean = tf.clip_by_value(mean, constraints_mean[0], constraints_mean[1])
+            std = tf.clip_by_value(std, constraints_std[0], constraints_std[1])
+
+            # convert back to mu, sigma
+            clipped_mu, clipped_sigma = self.compute_mu_sigma(mean, std)
+
+            # clip for nonsensical values
+            clipped_mu = tf.clip_by_value(clipped_mu, neg_fifty, -epsilon)
+            clipped_sigma = tf.clip_by_value(clipped_sigma, epsilon, six)
+
+            # ensure non-nans
+            clipped_mu = tf.where(tf.math.is_nan(clipped_mu), tf.zeros_like(clipped_mu), clipped_mu)
+            clipped_sigma = tf.where(tf.math.is_nan(clipped_sigma), tf.fill(clipped_sigma.shape, epsilon), clipped_sigma)
+            return clipped_mu, clipped_sigma
+
+        return clip_mu_sigma
+
+    @tf.function
     def optimization_step(self, optimizer):
         with tf.GradientTape() as tape:
             mus, sigmas = self.params.spread()
@@ -268,7 +303,7 @@ class InverseCanopy(tf.Module):
         # Compute gradients with respect to model parameters that are variables
         gradients = tape.gradient(loss, [self.params['mus'], self.params['sigmas']])
 
-        # Prepare (gradient, variable) pairs, applying the mask to each gradient
+        # # Prepare (gradient, variable) pairs, applying the mask to each gradient
         grads_and_vars = []
 
         # mu masks
@@ -282,33 +317,10 @@ class InverseCanopy(tf.Module):
         # Apply the masked gradients to the optimizer
         optimizer.apply_gradients(grads_and_vars)
 
-        # Convert mu, sigma to mean, std
-        means_stds = self.params.to_meanstd(dtype=self.dtype)
+        clipped_mu, clipped_sigma = self.clip_mu_sigma(self.params['mus'], self.params['sigmas'])
+        (self.params['mus']).assign(clipped_mu)
+        (self.params['sigmas']).assign(clipped_sigma)
 
-        # Apply constraints in the original space
-        clipped_means_stds = ModelInputs()
-        clipped_means_stds['means'] = tf.clip_by_value(means_stds['means'], self.constraints['means'][0],
-                                                       self.constraints['means'][1])
-        clipped_means_stds['stds'] = tf.clip_by_value(means_stds['stds'], self.constraints['stds'][0],
-                                                      self.constraints['stds'][1])
-
-        # Convert back to mu, sigma
-        constrained_mus_sigmas = clipped_means_stds.to_musigma(dtype=self.dtype)
-
-        # Assign new mu, sigma
-        self.params['mus'].assign(constrained_mus_sigmas['mus'])
-        self.params['sigmas'].assign(constrained_mus_sigmas['sigmas'])
-
-        self.params['mus'].assign(tf.minimum(self.params['mus'], -self.epsilon))
-        self.params['mus'].assign(tf.maximum(self.params['mus'], tf.cast(-50, dtype=self.dtype)))
-        self.params['sigmas'].assign(tf.minimum(self.params['sigmas'], tf.cast(6, dtype=self.dtype)))
-        self.params['sigmas'].assign(tf.maximum(self.params['sigmas'], self.epsilon))
-
-        # tf.debugging.check_numerics(self.params['mus'], "mus has NaNs")
-        # tf.debugging.check_numerics(self.params['sigmas'], "sigmas has NaNs")
-
-        self.params['mus'].assign(tf.where(tf.math.is_nan(self.params['mus']), tf.fill(self.params['sigmas'].shape, self.epsilon), self.params['mus']))
-        self.params['sigmas'].assign(tf.where(tf.math.is_nan(self.params['sigmas']), tf.fill(self.params['sigmas'].shape, self.epsilon), self.params['sigmas']))
         return loss
 
     """
@@ -331,19 +343,25 @@ class InverseCanopy(tf.Module):
     def train_model(self, optimizer, early_stop=EarlyStop(min_delta=0.001, patience=10), steps=1000):
         loss = []
         step = 0
+
+        start_time = time.time()
+
         for step in range(steps):
             loss = self.optimization_step(optimizer)
 
             if step % 100 == 0:
-                # Print the losses along with the step number
-                print(f"Step {step}: Loss = {loss.numpy():.16f}")
+                elapsed_time = time.time() - start_time  # Calculate elapsed time
+                its_per_sec = (100.0 / elapsed_time)
+                performance = f"performing {its_per_sec:.1f} it/sec" if its_per_sec >= 1 else f"consuming {(1.0/its_per_sec):.1f} sec/it"
+                tf.print(f"Step {step}: Loss = {loss:.16f}, {performance}")
+                start_time = time.time()  # Reset the start time for the next interval
 
             early_stop(current_loss=loss.numpy(), step=step, params=self.params)
             if early_stop.should_stop:
-                print(f"No improvement since Step {step - early_stop.patience + 1}, early stopping.")
+                tf.print(f"No improvement since Step {step - early_stop.patience + 1}, early stopping.")
                 break
 
-        print(f"[Best]  Step {early_stop.step_at_best_loss}: Loss = {early_stop.best_loss:.16f}\n"
+        tf.print(f"[Best]  Step {early_stop.step_at_best_loss}: Loss = {early_stop.best_loss:.16f}\n"
               f"[Final] Step {step}: Loss = {loss.numpy():.16f}\n")
 
         self.summarize(show_plot=False)

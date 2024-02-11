@@ -25,6 +25,7 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3.8',
     ],
+    packages=['inverse_canopy'],
     python_requires='>=3.6',
     entry_points={
     },

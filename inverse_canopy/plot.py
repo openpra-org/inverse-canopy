@@ -4,21 +4,15 @@ from .params import ModelParams
 def subplot_pdfs(y_pred_pdf, y_target_pdf, title='',
                  event_names=['SDFR-0', 'SDFR-1', 'SDFR-2', 'SDFR-3', 'SDFR-4', 'SDFR-5', 'SDFR-6', 'SDFR-7', 'SDFR-8'],
                  save=False, alpha=0.2, size=(20, 5), xlim=[1e-10, 1e0], points=1000,
-                 loc=['center left', 'center right']):
+                 loc=['center left', 'center right'], density_top=False, density_bot=False):
     import numpy as np
     import matplotlib.pyplot as plt
     from scipy.stats import gaussian_kde
     from matplotlib.ticker import LogLocator
 
-    # Convert tensors to numpy arrays if they are not already
-    y_pred_pdf = y_pred_pdf.numpy() if hasattr(y_pred_pdf, 'numpy') else y_pred_pdf
-    y_target_pdf = y_target_pdf.numpy() if hasattr(y_target_pdf, 'numpy') else y_target_pdf
-
     # Set up the plot with two subplots
     fig, axs = plt.subplots(2, 1, figsize=size, sharex=True, constrained_layout=True)
 
-    # Colors for each distribution
-    # colors = plt.cm.tab10(np.linspace(0, 1, len(y_pred_pdf)))
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22',
               '#17becf']
 
@@ -26,27 +20,37 @@ def subplot_pdfs(y_pred_pdf, y_target_pdf, title='',
     x_grid = np.logspace(np.log10(xlim[0]), np.log10(xlim[1]), points, endpoint=False)
 
     # Function to plot distributions
-    def plot_distributions(ax, y_pdf, title, loc_):
+    def plot_distributions(ax, y_pdf_tf, title_, loc_, density_):
+        # Convert tensors to numpy arrays if they are not already
+        y_pdf = y_pdf_tf.numpy() if hasattr(y_pdf_tf, 'numpy') else y_pdf_tf
         for i, dist in enumerate(y_pdf):
-            kde = gaussian_kde(dist, bw_method=1)
-            log_dist = np.log(dist)
+            log_dist = np.log(dist + np.finfo(float).eps)  # Adding epsilon to avoid log(0)
+            p05 = np.percentile(dist, 5.0)
+            p95 = np.percentile(dist, 95.0)
             mean, std = ModelParams(mus=np.mean(log_dist), sigmas=np.std(log_dist)).to_meanstd().spread()
-            density = kde.evaluate(x_grid)
-            if density.max() > 0:  # Check if density.max() is greater than zero
-                # Normalize the peak of the density to 1 for comparison
-                density /= density.max()
-                ax.fill_between(x_grid, 0, density, color=colors[i], alpha=alpha)
-                ax.plot(x_grid, density, label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}", color=colors[i], alpha=1.0)
+            if density_:
+                try:
+                    kde = gaussian_kde(dist, bw_method=1)
+                    density = kde.evaluate(x_grid)
+                    density /= density.max()
+                    ax.fill_between(x_grid, 0, density, color=colors[i], alpha=alpha)
+                    ax.plot(x_grid, density, label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}", color=colors[i], alpha=1.0)
+                    ax.fill_betweenx([0, density.max()], p05, p95, color=colors[i], alpha=0.2)
+                except Exception as e:
+                    ax.axvline(x=mean, linestyle='-', label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}", color=colors[i],
+                            alpha=1.0)
+                    ax.fill_betweenx((0, 1), p05, p95, color=colors[i], alpha=0.2)
             else:
                 ax.axvline(x=mean, linestyle='-', label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}", color=colors[i],
                            alpha=1.0)
+                ax.fill_betweenx((0, 1), p05, p95, color=colors[i], alpha=0.2)
         if title != '':
-            ax.set_title(title)
+            ax.set_title(title_)
         ax.legend(framealpha=1, prop={'family': 'monospace'}, loc=loc_)
 
     # Plot distributions for y_pred_pdf and y_target_pdf
-    plot_distributions(axs[0], y_pred_pdf, '', loc_=loc[0])
-    plot_distributions(axs[1], y_target_pdf, '', loc_=loc[1])
+    plot_distributions(axs[0], y_pred_pdf, '', loc_=loc[0], density_=density_top)
+    plot_distributions(axs[1], y_target_pdf, '', loc_=loc[1], density_=density_bot)
 
     # Set labels and scales
     axs[1].set_xlabel('P(x)')
@@ -58,6 +62,9 @@ def subplot_pdfs(y_pred_pdf, y_target_pdf, title='',
     # set limits
     axs[0].set_xlim(xlim[0], xlim[1])
     axs[1].set_xlim(xlim[0], xlim[1])
+
+    axs[0].set_ylim(0, 1)
+    axs[1].set_ylim(0, 1)
 
     # Set major ticks every 10^-1
     major_locator = LogLocator(base=10.0, subs=[1.0], numticks=10)
@@ -86,3 +93,8 @@ def subplot_pdfs(y_pred_pdf, y_target_pdf, title='',
             print("File saved locally; automatic download not available outside Google Colab.")
 
     plt.show()
+
+
+def plot_predicted_end_states(pdf_pred, pdf_target, names, title='end_states_predicted', save=False, size=(20, 5), xlim=[1e-14, 1e0], loc=['center left', 'center left']):
+    subplot_pdfs(pdf_pred, pdf_target, event_names=names, title=title, save=save, size=size, xlim=xlim, loc=loc)
+    pass

@@ -15,8 +15,8 @@ class ModelOutputs(dict):
         self['means'] = means
         self['stds'] = stds
 
-    def to_musigma(self) -> 'ModelParams':
-        mus, sigmas = compute_mu_sigma(self['means'], self['stds'])
+    def to_musigma(self, dtype=tf.float64) -> 'ModelParams':
+        mus, sigmas = compute_mu_sigma(self['means'], self['stds'], dtype=dtype)
         return ModelParams(mus=mus, sigmas=sigmas)
 
     def __repr__(self):
@@ -60,8 +60,8 @@ class ModelParams(dict):
     def spread(self):
         return self['mus'], self['sigmas']
 
-    def to_meanstd(self) -> ModelOutputs:
-        means, stds = compute_mean_std(self['mus'], self['sigmas'])
+    def to_meanstd(self, dtype=tf.float64) -> ModelOutputs:
+        means, stds = compute_mean_std(self['mus'], self['sigmas'], dtype=dtype)
         return ModelOutputs(means=means, stds=stds)
 
     def __repr__(self):

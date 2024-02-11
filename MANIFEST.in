@@ -3,3 +3,4 @@ include README.md
 recursive-include inverse_canopy *
 prune tests/
 exclude *.ipynb
+exclude notebooks/

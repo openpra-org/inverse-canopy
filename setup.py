@@ -6,7 +6,7 @@ with open('README.md') as f:
 setup(
     name='inverse-canopy',
     url='https://git@git.space.openpra.org/openpra/inverse-canopy.git',
-    version='0.0.3',
+    version='0.0.4',
     author='Arjun Earthperson',
     author_email='arjun@openpra.org',
     license='AGPL3',
@@ -27,8 +27,5 @@ setup(
     ],
     python_requires='>=3.6',
     entry_points={
-        # 'console_scripts': [
-        #     'inverse-canopy=inverse_canopy:main',
-        # ],
     },
 )

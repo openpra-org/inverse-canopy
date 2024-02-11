@@ -6,7 +6,7 @@ with open('README.md') as f:
 setup(
     name='inverse-canopy',
     url='https://openpra.org',
-    version='0.0.5',
+    version='0.0.6',
     author='Arjun Earthperson',
     author_email='arjun@openpra.org',
     license='AGPL-3.0',
@@ -14,9 +14,8 @@ setup(
     long_description_content_type='text/markdown',
     long_description=README,
     install_requires=[
-        'tensorflow==2.13.1',
-        'tensorflow-metal==1.0.0',
-        'tensorflow-probability==0.21.0',
+        'tensorflow==2.15.0',
+        'tensorflow-probability==0.23.0',
         'numpy',
         'scipy',
         'matplotlib'

@@ -6,11 +6,12 @@ with open('README.md') as f:
 setup(
     name='inverse-canopy',
     url='https://openpra.org',
-    version='0.0.6',
+    version='0.0.8',
     author='Arjun Earthperson',
     author_email='arjun@openpra.org',
     license='AGPL-3.0',
-    description='',
+    description='Tensorflow based library for back-fitting event tree conditional/functional event probability '
+                'distributions to match target end-state frequencies.',
     long_description_content_type='text/markdown',
     long_description=README,
     install_requires=[

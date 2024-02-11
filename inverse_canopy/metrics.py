@@ -16,12 +16,12 @@ def summarize_metrics(metrics, ids, metric_names=f"5th       Mean      95th"):
     metric_names = (' ' * (initial_spaces + 3)) + metric_names
     print(metric_names)
     for i, event in enumerate(ids):
-        line = f"{event}:"
+        line = f"{event}" + (" " * (initial_spaces - len(event)))
         for metric in metrics:
             line += f"  {metric.numpy()[i]:.2e}"
         print(line)
-    line = '-' * (initial_spaces + 31)
-    print(line)
+    #line = '-' * (initial_spaces + 31)
+    print("\n")
     pass
 
 
@@ -30,7 +30,7 @@ def summarize_predicted_conditional_events(model):
     predicted_samples = model.sample_from_distribution(predicted_mus, predicted_sigmas)
     p05, mean, p95 = compute_metrics(predicted_samples)
     conditional_events = model.conditional_events['names']
-    initial_spaces = (max(len(s) for s in conditional_events) + 31)
+    initial_spaces = (max(len(s) for s in conditional_events) + 30)
     print(f"predicted conditional events")
     print("-" * initial_spaces)
     summarize_metrics([p05, mean, p95], conditional_events, metric_names=f"5th       Mean      95th")
@@ -44,7 +44,7 @@ def summarize_predicted_end_states(model, show_plot=True, show_metrics=True):
 
     if show_metrics:
         p05, mean, p95 = compute_metrics(y_pred_pdf, axis=1)
-        initial_spaces = (max(len(s) for s in end_state_names) + 31)
+        initial_spaces = (max(len(s) for s in end_state_names) + 30)
         print(f"predicted end states")
         print("-" * initial_spaces)
         summarize_metrics([p05, mean, p95], end_state_names, metric_names=f"5th       Mean      95th")

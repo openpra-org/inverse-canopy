@@ -9,7 +9,6 @@ from .early_stop import EarlyStop
 from .metrics import summarize_predicted_end_states, summarize_predicted_conditional_events
 
 
-
 def initialize_conditional_events(events, dtype):
     bounds: ModelInputs = ModelInputs()
     bounds['means'] = tf.constant([events['bounds']['mean']['min'], events['bounds']['mean']['max']], dtype=dtype)
@@ -30,7 +29,8 @@ def initialize_conditional_events(events, dtype):
 def initialize_end_states(end_states, num_samples, dtype):
     probabilities = tf.constant(np.array([details['probability'] for details in end_states.values()]), dtype=dtype)
     assert np.isclose(probabilities.numpy().sum(), 1.0, atol=1e-8), f"Probabilities {probabilities.numpy().sum()} must sum to 1."
-    end_state_pdf = tf.tile(tf.reshape(probabilities, (probabilities.shape[0], 1)), [1, num_samples])
+    ones_vector = tf.ones([num_samples], dtype=dtype)
+    end_state_pdf = probabilities[:, tf.newaxis] * ones_vector
     event_sequences = tf.constant(np.array([details['sequence'] for details in end_states.values()]), dtype=dtype)
     return end_state_pdf, event_sequences
 
@@ -273,6 +273,7 @@ class InverseCanopy(tf.Module):
         epsilon = self.epsilon
         neg_fifty = tf.cast(-50, dtype=dtype)
         six = tf.cast(6, dtype=dtype)
+
         @tf.function(input_signature=input_signature)
         def clip_mu_sigma(mu, sigma):
             # Convert mu, sigma to mean, std and apply constraints
@@ -364,6 +365,25 @@ class InverseCanopy(tf.Module):
         tf.print(f"[Best]  Step {early_stop.step_at_best_loss}: Loss = {early_stop.best_loss:.16f}\n"
               f"[Final] Step {step}: Loss = {loss.numpy():.16f}\n")
 
+        self.summarize(show_plot=False)
+
+    def train_model_with_profiling(self, optimizer, early_stop=EarlyStop(min_delta=0.001, patience=10), steps=1000):
+        log_dir = "./logs/train_data"
+        try:
+            loss = []
+            step = 0
+            tf.profiler.experimental.start(log_dir)
+            for step in range(steps):
+                loss = self.optimization_step(optimizer)
+                early_stop(current_loss=loss.numpy(), step=step, params=self.params)
+                if early_stop.should_stop:
+                    tf.print(f"No improvement since Step {step - early_stop.patience + 1}, early stopping.")
+                    break
+        finally:
+            tf.profiler.experimental.stop()
+
+        tf.print(f"[Best]  Step {early_stop.step_at_best_loss}: Loss = {early_stop.best_loss:.16f}\n"
+                 f"[Final] Step {step}: Loss = {loss.numpy():.16f}\n")
         self.summarize(show_plot=False)
 
     def summarize(self, show_plot=True, show_metrics=True):

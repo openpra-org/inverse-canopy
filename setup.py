@@ -6,7 +6,7 @@ with open('README.md') as f:
 setup(
     name='inverse-canopy',
     url='https://openpra.org',
-    version='0.0.6',
+    version='0.0.7',
     author='Arjun Earthperson',
     author_email='arjun@openpra.org',
     license='AGPL-3.0',

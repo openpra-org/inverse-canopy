@@ -25,7 +25,7 @@ def summarize_metrics(metrics, ids, metric_names=f"5th       Mean      95th"):
     pass
 
 
-def summarize_predicted_conditional_events(model):
+def summarize_predicted_conditional_events(model, scale_initiating_event_frequency=True):
     predicted_mus, predicted_sigmas = model.params.spread()
     predicted_samples = model.sample_from_distribution(predicted_mus, predicted_sigmas)
     p05, mean, p95 = compute_metrics(predicted_samples)
@@ -37,11 +37,17 @@ def summarize_predicted_conditional_events(model):
     pass
 
 
-def summarize_predicted_end_states(model, show_plot=True, show_metrics=True):
+def summarize_predicted_end_states(model, show_plot=True, show_metrics=True, scale_by_initiating_event_frequency=True):
     predicted_mus, predicted_sigmas = model.params.spread()
     y_pred_pdf = model.predict_end_state_likelihoods(predicted_mus, predicted_sigmas)
-    end_state_names = [name for name in model.end_states.keys()]
+    y_obs_pdf = model.targets['pdf']
 
+    if scale_by_initiating_event_frequency:
+        tf.print(y_pred_pdf.shape)
+        y_pred_pdf *= model.initiating_event_frequency
+        y_obs_pdf *= model.initiating_event_frequency
+
+    end_state_names = [name for name in model.end_states.keys()]
     if show_metrics:
         p05, mean, p95 = compute_metrics(y_pred_pdf, axis=1)
         initial_spaces = (max(len(s) for s in end_state_names) + 30)
@@ -50,5 +56,5 @@ def summarize_predicted_end_states(model, show_plot=True, show_metrics=True):
         summarize_metrics([p05, mean, p95], end_state_names, metric_names=f"5th       Mean      95th")
 
     if show_plot:
-        plot_predicted_end_states(y_pred_pdf, model.targets['pdf'], names=end_state_names)
+        plot_predicted_end_states(y_pred_pdf, y_obs_pdf, names=end_state_names)
     pass

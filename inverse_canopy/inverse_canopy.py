@@ -403,7 +403,7 @@ class InverseCanopy(tf.Module):
                  f"[Final] Step {step}: Loss = {loss.numpy():.16f}\n")
         self.summarize(show_plot=False)
 
-    def summarize(self, show_plot=True, show_metrics=True):
+    def summarize(self, show_plot=True, show_metrics=True, scale_by_initiating_event_frequency=True):
         summarize_predicted_end_states(self, show_plot=show_plot, show_metrics=show_metrics)
         if show_metrics:
             summarize_predicted_conditional_events(self)

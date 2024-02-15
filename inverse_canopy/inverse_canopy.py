@@ -9,26 +9,41 @@ from .early_stop import EarlyStop
 from .metrics import summarize_predicted_end_states, summarize_predicted_conditional_events
 
 
-def initialize_conditional_events(events, dtype):
+def initialize_conditional_events(events, dtype, freeze_initiating_event=False):
     bounds: ModelInputs = ModelInputs()
     bounds['means'] = tf.constant([events['bounds']['mean']['min'], events['bounds']['mean']['max']], dtype=dtype)
     bounds['stds'] = tf.constant([events['bounds']['std']['min'], events['bounds']['std']['max']], dtype=dtype)
 
     num_events = len(events['names'])
     initial: ModelInputs = ModelInputs()
-    initial['means'] = tf.constant([events['initial']['mean'] for _ in range(0, num_events)], dtype=dtype)
-    initial['stds'] = tf.constant([events['initial']['std'] for _ in range(0, num_events)], dtype=dtype)
+
+    mask_mus = [1 for _ in range(0, num_events)]
+    mask_sigmas = [1 for _ in range(0, num_events)]
+
+    initial_means = [events['initial']['mean'] for _ in range(0, num_events)]
+    initial_stds = [events['initial']['std'] for _ in range(0, num_events)]
+
+    if freeze_initiating_event:
+        initial_means[0] = 1  # always 1 since it scales the end-state freqs.
+        initial_stds[0] = events['bounds']['std']['min']  # minimum possible
+        # do not try to optimize the first conditional event
+        mask_mus[0] = 0
+        mask_sigmas[0] = 0
+
+    initial['means'] = tf.constant(initial_means, dtype=dtype)
+    initial['stds'] = tf.constant(initial_stds, dtype=dtype)
 
     mask: TrainableParams = TrainableParams()
-    mask['mus'] = tf.constant([1 for _ in range(0, num_events)], dtype=dtype)
-    mask['sigmas'] = tf.constant([1 for _ in range(0, num_events)], dtype=dtype)
+    mask['mus'] = tf.constant(mask_mus, dtype=dtype)
+    mask['sigmas'] = tf.constant(mask_sigmas, dtype=dtype)
 
     return bounds, initial, mask
 
 
-def initialize_end_states(end_states, num_samples, dtype):
-    probabilities = tf.constant(np.array([details['probability'] for details in end_states.values()]), dtype=dtype)
-    assert np.isclose(probabilities.numpy().sum(), 1.0, atol=1e-8), f"Probabilities {probabilities.numpy().sum()} must sum to 1."
+def initialize_end_states(end_states, num_samples, dtype, ie_freq=1):
+    probabilities = tf.constant(np.array([details['probability'] / ie_freq for details in end_states.values()]), dtype=dtype)
+    tf.print(probabilities, "sum to: ", probabilities.numpy().sum())
+    #assert np.isclose(probabilities.numpy().sum(), 1.0, atol=1e-8), f"Probabilities {probabilities.numpy().sum()} must sum to 1."
     ones_vector = tf.ones([num_samples], dtype=dtype)
     end_state_pdf = probabilities[:, tf.newaxis] * ones_vector
     event_sequences = tf.constant(np.array([details['sequence'] for details in end_states.values()]), dtype=dtype)
@@ -42,6 +57,8 @@ class InverseCanopy(tf.Module):
         self.dtype = tunable['dtype']
         self.epsilon = tf.constant(tunable['epsilon'], dtype=self.dtype)
         self.num_samples = tunable['num_samples']
+        self.initiating_event_frequency = tunable['initiating_event_frequency']
+        self.freeze_initiating_event = tunable['freeze_initiating_event']
 
         use_float32 = True if self.dtype.name.title() == 'float32' else False
         tf.keras.backend.set_floatx(str.lower(self.dtype.name.title()))
@@ -51,7 +68,7 @@ class InverseCanopy(tf.Module):
 
         # initialize conditional events related parameters
         self.conditional_events = conditional_events
-        bounds, initial_guess, trainable_mask = initialize_conditional_events(self.conditional_events, self.dtype)
+        bounds, initial_guess, trainable_mask = initialize_conditional_events(self.conditional_events, self.dtype, freeze_initiating_event=self.freeze_initiating_event)
         self.num_conditional_events = len(self.conditional_events['names'])
 
         # initialize internal model params
@@ -76,7 +93,7 @@ class InverseCanopy(tf.Module):
         # declare created methods
         self.compute_mu_sigma_from_sampled_distributions = self._create_compute_mu_sigma_from_sampled_distributions()
 
-        target_pdf, target_sequences = initialize_end_states(self.end_states, self.num_samples, self.dtype)
+        target_pdf, target_sequences = initialize_end_states(self.end_states, self.num_samples, self.dtype, ie_freq=self.initiating_event_frequency)
         target_log_pdf, target_mus, target_sigmas = self.compute_mu_sigma_from_sampled_distributions(target_pdf)
 
         self.targets = {

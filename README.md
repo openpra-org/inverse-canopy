@@ -23,12 +23,14 @@ You'll need to set up some parameters for the model to work with. These include 
 
 ```python
 tunable = {
- 'num_samples': 100,      # Number of Monte Carlo samples, you don't need too many for smooth functions
- 'learning_rate': 0.1,    # Learning rate for gradient updates
- 'dtype': tf.float64,     # Use 64-bit floats for calculations
- 'epsilon': 1e-30,        # Helps avoid log(0) errors
- 'max_steps': 5000,       # Maximum optimization steps
- 'patience': 50,          # Steps to wait for improvement before stopping   
+ 'num_samples': 100,                    # Number of Monte Carlo samples, you don't need too many for smooth functions
+ 'learning_rate': 0.1,                  # Learning rate for gradient updates
+ 'dtype': tf.float64,                   # Use 64-bit floats for calculations
+ 'epsilon': 1e-30,                      # Helps avoid log(0) errors
+ 'max_steps': 5000,                     # Maximum optimization steps
+ 'patience': 50,                        # Steps to wait for improvement before stopping
+ 'initiating_event_frequency': 5.0e-1,  # set the initiating event (IE) frequency here
+ 'freeze_initiating_event': True,       # set to False if you'd like to predict the IE frequency as well
 }
 ```
 
@@ -56,10 +58,6 @@ conditional_events = {
 }
 
 end_states = {
-    'OCSP-0': {
-        'sequence': [0, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
-        'probability': 1 - 3.24e-2 - 2.80e-10 - 5.81e-4 - 1.0e-11 - 1.9e-11 - 1.0e-11 - 1.0e-11 - 1.0e-11 - 1.5e-10 - 1.10e-7,
-    },
     'OCSP-1': {
         'sequence': [1, 0, 0, np.nan, 0, np.nan, np.nan, 0, np.nan, np.nan],
         'probability': 3.24e-2,

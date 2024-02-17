@@ -20,7 +20,6 @@ def summarize_metrics(metrics, ids, metric_names=f"5th       Mean      95th"):
         for metric in metrics:
             line += f"  {metric.numpy()[i]:.2e}"
         print(line)
-    #line = '-' * (initial_spaces + 31)
     print("\n")
     pass
 
@@ -43,7 +42,6 @@ def summarize_predicted_end_states(model, show_plot=True, show_metrics=True, sca
     y_obs_pdf = model.targets['pdf']
 
     if scale_by_initiating_event_frequency:
-        tf.print(y_pred_pdf.shape)
         y_pred_pdf *= model.initiating_event_frequency
         y_obs_pdf *= model.initiating_event_frequency
 

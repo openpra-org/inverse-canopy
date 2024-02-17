@@ -55,8 +55,34 @@ def compute_mean_std(mu, sigma, dtype=tf.float64):
     two = tf.cast(2.0, dtype)
     one = tf.cast(1.0, dtype)
     mean = tf.exp(mu + sigma**two / two)
-    std = tf.sqrt((tf.exp(sigma**two) - one) * tf.exp(two * mu + sigma**two))
+    std = mean * tf.sqrt(tf.exp(sigma ** 2) - one)
     return mean, std
+
+
+def compute_mean_error_factor_from_mu_sigma(mu, sigma, dtype=tf.float64):
+    mu = tf.cast(mu, dtype)
+    sigma = tf.cast(sigma, dtype)
+    two = tf.cast(2.0, dtype)
+    z = tf.cast(1.6448536269514722, dtype)
+    mean = tf.exp(mu + sigma**two / two)
+    error_factor = tf.exp(z * sigma)
+    return mean, error_factor
+
+
+def compute_5th_mean_95th_from_mu_sigma(mu, sigma, dtype=tf.float64):
+    mean, error_factor = compute_mean_error_factor_from_mu_sigma(mu, sigma, dtype)
+    median = tf.exp(mu)
+    p95 = median * error_factor
+    p05 = median / error_factor
+    return p05, mean, p95
+
+
+def compute_mu_sigma_from_5th_mean_95th(p05, mean, p95, dtype=tf.float64):
+    z = tf.cast(3.2897071310939356, dtype)
+    sigma = tf.math.log(p95/p05) / z
+    two = tf.cast(2.0, dtype)
+    mu = tf.math.log(mean) - (sigma**two / two)
+    return mu, sigma
 
 
 def constrain_mu(unconstrained_mu, lower_bound=-30.0, upper_bound=0.0, dtype=tf.float64):

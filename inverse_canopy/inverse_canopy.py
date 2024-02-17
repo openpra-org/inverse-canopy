@@ -43,7 +43,6 @@ def initialize_conditional_events(events, dtype, freeze_initiating_event=False):
 def initialize_end_states(end_states, num_samples, dtype, ie_freq=1):
     probabilities = tf.constant(np.array([details['probability'] / ie_freq for details in end_states.values()]), dtype=dtype)
     tf.print(probabilities, "sum to: ", probabilities.numpy().sum())
-    #assert np.isclose(probabilities.numpy().sum(), 1.0, atol=1e-8), f"Probabilities {probabilities.numpy().sum()} must sum to 1."
     ones_vector = tf.ones([num_samples], dtype=dtype)
     end_state_pdf = probabilities[:, tf.newaxis] * ones_vector
     event_sequences = tf.constant(np.array([details['sequence'] for details in end_states.values()]), dtype=dtype)
@@ -57,8 +56,16 @@ class InverseCanopy(tf.Module):
         self.dtype = tunable['dtype']
         self.epsilon = tf.constant(tunable['epsilon'], dtype=self.dtype)
         self.num_samples = tunable['num_samples']
-        self.initiating_event_frequency = tunable['initiating_event_frequency']
-        self.freeze_initiating_event = tunable['freeze_initiating_event']
+
+        if 'initiating_event_frequency' in tunable:
+            self.initiating_event_frequency = tunable['initiating_event_frequency']
+        else:
+            self.initiating_event_frequency = 1
+
+        if 'freeze_initiating_event' in tunable:
+            self.freeze_initiating_event = tunable['freeze_initiating_event']
+        else:
+            self.freeze_initiating_event = False
 
         use_float32 = True if self.dtype.name.title() == 'float32' else False
         tf.keras.backend.set_floatx(str.lower(self.dtype.name.title()))

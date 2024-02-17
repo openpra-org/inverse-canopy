@@ -42,7 +42,6 @@ def initialize_conditional_events(events, dtype, freeze_initiating_event=False):
 
 def initialize_end_states(end_states, num_samples, dtype, ie_freq=1):
     probabilities = tf.constant(np.array([details['probability'] / ie_freq for details in end_states.values()]), dtype=dtype)
-    tf.print(probabilities, "sum to: ", probabilities.numpy().sum())
     ones_vector = tf.ones([num_samples], dtype=dtype)
     end_state_pdf = probabilities[:, tf.newaxis] * ones_vector
     event_sequences = tf.constant(np.array([details['sequence'] for details in end_states.values()]), dtype=dtype)

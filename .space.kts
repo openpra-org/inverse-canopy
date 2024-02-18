@@ -4,15 +4,14 @@ job("Package") {
         workerTags("swarm-worker")
     }
 
-    container(displayName = "Build and Test", image = "python:3.9") {
-
-        env["PYPI_USER_TOKEN"] = "{{ project:PYPI_USER_TOKEN }}"
-        env["PYPI_PASSWORD_TOKEN"] = "{{ project:PYPI_PASSWORD_TOKEN }}"
-
+    container(displayName = "Show work dir", image = "ubuntu") {
         shellScript {
+            interpreter = "/bin/bash"
+            // note that you should escape the $ symbol in a Kotlin way
             content = """
-                echo "hello world"
+                echo The working directory is
             """
         }
     }
+
 }

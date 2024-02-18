@@ -36,8 +36,6 @@ setup(
         'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
@@ -47,7 +45,7 @@ setup(
         'Typing :: Typed'
     ],
     packages=['inverse_canopy'],
-    python_requires='>=3.6',
+    python_requires='>=3.8',
     entry_points={
     },
 )

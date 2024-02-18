@@ -56,4 +56,6 @@ job("Package") {
                           docker run --rm -it --tag="$remote:{{ branchSlug }}" pylint
                           """
       }
+
+    }
 }

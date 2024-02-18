@@ -39,21 +39,21 @@ job("Package") {
       shellScript("tests"){
         interpreter = "/bin/bash"
         content = """
-                          docker run --rm -it "$remote:{{ branchSlug }}" pytest
+                          docker run --rm "$remote:{{ branchSlug }}" pytest
                           """
       }
 
       shellScript("coverage"){
         interpreter = "/bin/bash"
         content = """
-                          docker run --rm -it "$remote:{{ branchSlug }}" pytest --cov
+                          docker run --rm "$remote:{{ branchSlug }}" pytest --cov
                           """
       }
 
       shellScript("lint"){
         interpreter = "/bin/bash"
         content = """
-                          docker run --rm -it "$remote:{{ branchSlug }}" pylint
+                          docker run --rm "$remote:{{ branchSlug }}" pylint
                           """
       }
 

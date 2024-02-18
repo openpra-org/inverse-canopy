@@ -13,3 +13,5 @@ scripts/
 .ipynb_checkpoints
 dist
 *.pyc
+
+.coverage

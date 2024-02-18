@@ -4,7 +4,7 @@ job("Package") {
         workerTags("swarm-worker")
     }
 
-    container(displayName = "Build and Test", image = "python:3.11") {
+    container(displayName = "Build and Test", image = "python:3.9") {
 
         env["PYPI_USER_TOKEN"] = "{{ project:PYPI_USER_TOKEN }}"
         env["PYPI_PASSWORD_TOKEN"] = "{{ project:PYPI_PASSWORD_TOKEN }}"

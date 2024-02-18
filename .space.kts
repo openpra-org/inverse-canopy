@@ -53,7 +53,7 @@ job("Package") {
       shellScript("lint"){
         interpreter = "/bin/bash"
         content = """
-                          docker run --rm "$remote:{{ branchSlug }}" pylint
+                          docker run --rm "$remote:{{ branchSlug }}" pylint /app/inverse-canopy
                           """
       }
 

@@ -1,5 +1,5 @@
 import tensorflow as tf
-from .conversions import compute_mu_sigma, compute_mean_std
+from .lognormal_utils import compute_mu_sigma, compute_mean_std
 
 
 class ModelOutputs(dict):

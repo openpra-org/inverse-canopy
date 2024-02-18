@@ -180,7 +180,11 @@ model.summarize(show_plot=True, show_metrics=False)
 ```
 ![output](https://gcdnb.pbrd.co/images/DDj4Nv536IJh.png?o=1 "demo output plot")
 
-## Upload to PyPI
+## Development
+
+Install dev packages as `pip install -e ".[dev]"`
+
+### Upload to PyPI
 
 - `python setup.py sdist bdist_wheel`
 - `pip install twine`

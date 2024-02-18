@@ -6,7 +6,7 @@ with open('README.md') as f:
 setup(
     name='inverse-canopy',
     url='https://openpra.org',
-    version='0.0.12',
+    version='0.0.13',
     author='Arjun Earthperson',
     author_email='arjun@openpra.org',
     license='AGPL-3.0',
@@ -21,11 +21,30 @@ setup(
         'scipy',
         'matplotlib'
     ],
+    extras_require={
+        'dev': [
+            'pytest',
+            'pytest-cov',
+            'pylint',
+            'pylint[spelling]'
+        ]
+    },
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
+        'Intended Audience :: Science/Research',
         'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Topic :: Software Development :: Libraries',
+        'Topic :: Scientific/Engineering',
+        'Typing :: Typed'
     ],
     packages=['inverse_canopy'],
     python_requires='>=3.6',

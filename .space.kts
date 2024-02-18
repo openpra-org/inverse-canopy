@@ -13,7 +13,6 @@ job("Package") {
             content = """
                 echo "hello world"
             """
-            interpreter = "/bin/bash"
         }
     }
 }

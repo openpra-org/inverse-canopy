@@ -23,6 +23,7 @@ setup(
     ],
     extras_require={
         'dev': [
+            'pyarrow',
             'pytest',
             'pytest-cov',
             'pylint',

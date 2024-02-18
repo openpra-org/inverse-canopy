@@ -5,6 +5,10 @@ job("Package") {
     }
 
     container(displayName = "Build and Test", image = "python:3.11") {
+
+        env["PYPI_USER_TOKEN"] = "{{ project:PYPI_USER_TOKEN }}"
+        env["PYPI_PASSWORD_TOKEN"] = "{{ project:PYPI_PASSWORD_TOKEN }}"
+
         shellScript {
             content = """
                 set -euxo pipefail
@@ -28,7 +32,7 @@ job("Package") {
                 twine check dist/*
 
                 # Push the package to PyPI
-                twine upload dist/* -u $PYPI_USER_TOKEN -p $PYPI_PASSWORD_TOKEN
+                twine upload dist/* -u ${'$'}PYPI_USER_TOKEN -p ${'$'}PYPI_PASSWORD_TOKEN
             """
             interpreter = "/bin/bash"
         }

@@ -67,7 +67,7 @@ job("Package") {
       shellScript("build & push"){
         interpreter = "/bin/bash"
         content = """
-                          docker run --rm "$remote:{{ branchSlug }}" /bin/bash "python setup.py sdist bdist_wheel && twine upload dist/* -u ${'$'}USER -p ${'$'}PASSWORD"
+                          docker run --rm "$remote:{{ branchSlug }}" /bin/bash -c "python setup.py sdist bdist_wheel && twine upload dist/* -u ${'$'}USER -p ${'$'}PASSWORD"
                           """
       }
     }

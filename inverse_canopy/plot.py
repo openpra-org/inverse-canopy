@@ -1,19 +1,24 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
+from matplotlib.ticker import LogLocator
+
 from .params import ModelParams
 
 
-def subplot_pdfs(y_pred_pdf, y_target_pdf, event_names, title='',
-                 save=False, alpha=0.2, size=(20, 5), xlim=[1e-10, 1e0], points=1000,
-                 loc=['center left', 'center right'], density_top=False, density_bot=False):
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from scipy.stats import gaussian_kde
-    from matplotlib.ticker import LogLocator
+def subplot_pdfs(y_pred_pdf, y_target_pdf, event_names, title='', save=False, alpha=0.2, size=(20, 5), xlim=None,
+                 points=1000, loc=None, density_top=False, density_bot=False):
+
+    if xlim is None:
+        xlim = [1e-10, 1e0]
+
+    if loc is None:
+        loc = ['center left', 'center right']
 
     # Set up the plot with two subplots
-    fig, axs = plt.subplots(2, 1, figsize=size, sharex=True, constrained_layout=True)
+    _, axs = plt.subplots(2, 1, figsize=size, sharex=True, constrained_layout=True)
 
     colors = plt.cm.tab10(np.linspace(0, 1, len(y_pred_pdf)))
-
 
     # Define a common grid to evaluate all densities
     x_grid = np.logspace(np.log10(xlim[0]), np.log10(xlim[1]), points, endpoint=False)
@@ -36,7 +41,7 @@ def subplot_pdfs(y_pred_pdf, y_target_pdf, event_names, title='',
                     ax.plot(x_grid, density, label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}", color=colors[i],
                             alpha=1.0)
                     ax.fill_betweenx([0, density.max()], p05, p95, color=colors[i], alpha=0.2)
-                except Exception as e:
+                except Exception:
                     ax.axvline(x=mean, linestyle='-', label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}",
                                color=colors[i],
                                alpha=1.0)
@@ -97,6 +102,11 @@ def subplot_pdfs(y_pred_pdf, y_target_pdf, event_names, title='',
 
 
 def plot_predicted_end_states(pdf_pred, pdf_target, names, title='end_states_predicted', save=False, size=(20, 5),
-                              xlim=[1e-14, 1e0], loc=['center left', 'center left']):
+                              xlim=None, loc=None):
+    if xlim is None:
+        xlim = [1e-14, 1e0]
+
+    if loc is None:
+        loc = ['center left', 'center left']
+
     subplot_pdfs(pdf_pred, pdf_target, event_names=names, title=title, save=save, size=size, xlim=xlim, loc=loc)
-    pass

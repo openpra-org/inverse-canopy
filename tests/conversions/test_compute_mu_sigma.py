@@ -1,3 +1,11 @@
+"""
+This module contains unit tests for the compute_mu_sigma function in the lognormal_utils module.
+
+The compute_mu_sigma function is designed to compute the parameters mu and sigma of the log-normal
+distribution given the mean and standard deviation of the distribution. These tests cover various
+scenarios including basic float inputs, vector inputs, and edge cases such as zero standard deviation.
+"""
+
 import unittest
 import tensorflow as tf
 import numpy as np
@@ -6,6 +14,15 @@ from inverse_canopy.lognormal_utils import compute_mu_sigma
 
 
 class TestComputeMuSigma(unittest.TestCase):
+    """
+    A test case class that contains methods to test the compute_mu_sigma function.
+
+    The tests include:
+    - Testing with basic float32 inputs.
+    - Testing with basic float64 inputs.
+    - Testing with vector inputs.
+    - Testing with a standard deviation of zero.
+    """
     def test_basic_float32(self):
         """Test with basic float32 inputs."""
         mean = tf.constant(3.0, dtype=tf.float32)

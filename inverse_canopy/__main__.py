@@ -1,4 +1,5 @@
-
+"""
+Inverse Canopy: Stub main function
+"""
 if __name__ == "__main__":
-    # main()
-    print("in main")
+    pass

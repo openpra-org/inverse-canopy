@@ -171,8 +171,7 @@ class InverseCanopy(tf.Module):
         return compute_y
 
     def _create_compute_mu_sigma_from_sampled_distributions(self):
-
-        input_signature = tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype),
+        input_signature = [tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype)]
 
         @tf.function(input_signature=input_signature)
         def compute_mu_sigma_from_sampled_distributions(y_dists):
@@ -223,7 +222,7 @@ class InverseCanopy(tf.Module):
 
         @tf.function(input_signature=input_signature)
         def normalized_relative_logarithmic_error(y_pred):
-            log_y_pred, mu_y_pred, sigma_y_pred = self.compute_mu_sigma_from_sampled_distributions(y_pred)
+            log_y_pred, _, sigma_y_pred = self.compute_mu_sigma_from_sampled_distributions(y_pred)
             pdf_losses = self.mae_loss(log_y_true, log_y_pred)
             sigma_losses = tf.abs(sigma_y_true - sigma_y_pred)
             mean_stack = tf.reduce_mean(tf.stack([pdf_losses, sigma_losses]), axis=0)
@@ -350,7 +349,6 @@ class InverseCanopy(tf.Module):
     """
     end-user helper function
     """
-
     def fit(self, learning_rate=0.1, patience=10, min_improvement=0.001, steps=1000, seed=372):
         tf.print(f"learning_rate: {learning_rate},"
                  f"patience: {patience},"
@@ -375,7 +373,7 @@ class InverseCanopy(tf.Module):
 
             if step % 100 == 0:
                 elapsed_time = time.time() - start_time  # Calculate elapsed time
-                its_per_sec = (100.0 / elapsed_time)
+                its_per_sec = 100.0 / elapsed_time
                 performance = f"performing {its_per_sec:.1f} it/sec" if its_per_sec >= 1 else f"consuming {(1.0/its_per_sec):.1f} sec/it"
                 tf.print(f"Step {step}: Loss = {loss:.16f}, {performance}")
                 start_time = time.time()  # Reset the start time for the next interval

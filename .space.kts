@@ -58,4 +58,17 @@ job("Package") {
       }
 
     }
+
+    host("Publish") {
+
+      env["USER"] = "{{ project:PYPI_USER_TOKEN }}"
+      env["PASSWORD"] = "{{ project:PYPI_PASSWORD_TOKEN }}"
+
+      shellScript("build & push"){
+        interpreter = "/bin/bash"
+        content = """
+                          docker run --rm "$remote:{{ branchSlug }}" /bin/bash "python setup.py sdist bdist_wheel && twine upload dist/* -u ${'$'}USER -p ${'$'}PASSWORD"
+                          """
+      }
+    }
 }

@@ -1,17 +1,20 @@
-*.csv
+.gitignore
+.git
+build
+dist
 *.egg-info
+
+*.csv
 *.swp
 .idea
 __pycache__
 config.ini
 env
 venv
-build
 *.whl
 *.tar.*
 scripts/
 .ipynb_checkpoints
-dist
 *.pyc
 
 .coverage

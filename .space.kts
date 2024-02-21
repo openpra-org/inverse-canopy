@@ -1,4 +1,4 @@
-job("Package") {
+job("InverseCanopy CI") {
 
     requirements {
         workerTags("swarm-worker")
@@ -24,6 +24,9 @@ job("Package") {
       val maxSlugLength = if (branchName.length > 48) 48 else branchName.length
       var branchSlug = branchName.subSequence(0, maxSlugLength).toString()
       api.parameters["branchSlug"] = branchSlug
+
+      api.parameters["isMainBranch"] = (api.gitBranch() == "refs/heads/main").toString()
+
     }
   }
 
@@ -61,13 +64,17 @@ job("Package") {
 
     host("Publish") {
 
+      runIf("{{ isMainBranch }}")
+
       env["USER"] = "{{ project:PYPI_USER_TOKEN }}"
       env["PASSWORD"] = "{{ project:PYPI_PASSWORD_TOKEN }}"
 
       shellScript("build & push"){
         interpreter = "/bin/bash"
         content = """
+                          docker build --tag="$remote:{{ branchSlug }}" .
                           docker run --rm "$remote:{{ branchSlug }}" /bin/bash -c "python setup.py sdist bdist_wheel && twine upload dist/* -u ${'$'}USER -p ${'$'}PASSWORD"
+                          docker rmi "$remote:{{ branchSlug }}"
                           """
       }
     }

@@ -7,9 +7,27 @@ frequencies.
 
 Below is a step-by-step example of how to use `inverse-canopy` in your project.
 
-### Step 1: Import the Package
+### Step 1: Install the Package
 
 First, you need to import `InverseCanopy` from `inverse_canopy`, along with `tensorflow` and `numpy`.
+
+```shell
+!pip install inverse-canopy==0.0.20
+```
+
+Alternatively, you can install the CUDA or Metal accelerated versions. No code changes are required as long as the
+appropriate version is installed.
+#### inverse-canopy CUDA [Linux]
+```shell
+# optionally, first check if an nvidia GPU is available
+!nvidia-smi
+!pip install inverse-canopy[cuda]==0.0.20
+```
+
+#### inverse-canopy Metal [macOS]
+```shell
+!pip install inverse-canopy[metal]==0.0.20
+```
 
 ```python
 from inverse_canopy import InverseCanopy
@@ -23,7 +41,7 @@ You'll need to set up some parameters for the model to work with. These include 
 
 ```python
 tunable = {
- 'num_samples': 100,                    # Number of Monte Carlo samples, you don't need too many for smooth functions
+ 'num_samples': 1000000,                # Number of Monte Carlo samples, you don't need too many for smooth functions
  'learning_rate': 0.1,                  # Learning rate for gradient updates
  'dtype': tf.float64,                   # Use 64-bit floats for calculations
  'epsilon': 1e-30,                      # Helps avoid log(0) errors
@@ -36,7 +54,8 @@ tunable = {
 
 ### Step 3: Set Up Conditional Events and End States
 
-Define the conditional events and end states for your model. This includes names, bounds for mean and standard deviation, initial values, and the probabilities for each end state.
+Define the conditional events and end states for your model. This includes names, bounds for mean and standard
+deviation, initial values, and the probabilities for each end state.
 
 ```python
 conditional_events = {
@@ -109,7 +128,7 @@ Create an instance of `InverseCanopy` with your conditional events, end states, 
 
 ```python
 model = InverseCanopy(conditional_events, end_states, tunable)
-model.fit(steps=tunable['max_steps'], patience=tunable['patience'], learning_rate=tunable['learning_rate'])
+model.fit(steps=tunable['max_steps'], patience=tunable['patience'], learning_rate=tunable['learning_rate'], legacy=False)
 ```
 
 ### Step 5: Summarize the Results
@@ -129,7 +148,7 @@ Checkout the [demo jupyter notebook](notebooks/demo.ipynb).
 
 ```jupyterpython
 model = InverseCanopy(conditional_events, end_states, tunable)
-model.fit(steps=tunable['max_steps'], patience=tunable['patience'], learning_rate=tunable['learning_rate'])
+model.fit(steps=tunable['max_steps'], patience=tunable['patience'], learning_rate=tunable['learning_rate'], legacy=False)
 ```
 ```pycon
 tunable initialized: dtype=<dtype: 'float64'>, epsilon=1e-30

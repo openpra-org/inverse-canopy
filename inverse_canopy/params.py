@@ -124,6 +124,20 @@ class ModelParams(dict):
         means, stds = compute_mean_std(self['mus'], self['sigmas'], dtype=dtype)
         return ModelOutputs(means=means, stds=stds)
 
+    def deep_copy(self):
+        """
+        Create a deep copy of the ModelParams instance.
+
+        Returns:
+            ModelParams: A new instance of ModelParams with copied values.
+        """
+        # Use tf.identity to create a copy of the tensors
+        copied_mus = tf.Variable(tf.identity(self['mus']))
+        copied_sigmas = tf.Variable(tf.identity(self['sigmas']))
+
+        # Create a new instance of ModelParams with the copied tensors
+        return ModelParams(mus=copied_mus, sigmas=copied_sigmas)
+
     def __repr__(self):
         mus_str = ", ".join([f"{m:.2e}" for m in self['mus'].numpy()])
         sigmas_str = ", ".join([f"{s:.2e}" for s in self['sigmas'].numpy()])

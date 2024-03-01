@@ -2,6 +2,7 @@
 Module for implementing early stopping during training.
 """
 import numpy as np
+from .params import ModelParams
 
 
 class EarlyStop:
@@ -23,9 +24,9 @@ class EarlyStop:
         self.epochs_since_improvement = 0
         self.should_stop = False
         self.step_at_best_loss = np.nan
-        self.best_params = None
+        self.best_params: ModelParams = ModelParams()
 
-    def __call__(self, current_loss, step, params):
+    def __call__(self, current_loss, step, params: ModelParams):
         """
         Call method to update the early stopping criteria based on current loss.
 
@@ -38,7 +39,7 @@ class EarlyStop:
             self.best_loss = current_loss
             self.epochs_since_improvement = 0
             self.step_at_best_loss = step
-            self.best_params = params
+            self.best_params = params.deep_copy()
         else:
             self.epochs_since_improvement += 1
 

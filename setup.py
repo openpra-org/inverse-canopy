@@ -9,7 +9,7 @@ with open('README.md', encoding='utf-8') as f:
 setup(
     name='inverse-canopy',
     url='https://openpra.org',
-    version='0.0.14',
+    version='0.0.20',
     author='Arjun Earthperson',
     author_email='arjun@openpra.org',
     license='AGPL-3.0',
@@ -18,13 +18,21 @@ setup(
     long_description_content_type='text/markdown',
     long_description=README,
     install_requires=[
-        'tensorflow==2.15.0',
-        'tensorflow-probability==0.23.0',
+        'tensorflow',
+        'tensorflow-probability',
         'numpy',
         'scipy',
         'matplotlib'
     ],
     extras_require={
+        'cuda': [
+            'tensorflow[and-cuda]'
+        ],
+        'metal': [
+            'tensorflow==2.13.1',
+            'tensorflow-metal==1.0.0',
+            'tensorflow-probability==0.21.0',
+        ],
         'dev': [
             'pyarrow',
             'pytest',

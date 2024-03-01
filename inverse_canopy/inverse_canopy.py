@@ -1,3 +1,6 @@
+"""
+main module for inverse_canopy, implementing the inverse UQ algorithm.
+"""
 import time
 import numpy as np
 import tensorflow as tf
@@ -349,7 +352,7 @@ class InverseCanopy(tf.Module):
     """
     end-user helper function
     """
-    def fit(self, learning_rate=0.1, patience=10, min_improvement=0.001, steps=1000, seed=372):
+    def fit(self, learning_rate=0.1, patience=10, min_improvement=0.001, steps=1000, seed=372, legacy=False):
         tf.print(f"learning_rate: {learning_rate},"
                  f"patience: {patience},"
                  f"min_improvement: {min_improvement},"
@@ -359,7 +362,11 @@ class InverseCanopy(tf.Module):
         tf.random.set_seed(seed)
         np.random.seed(seed)
         early_stop = EarlyStop(min_delta=min_improvement, patience=patience)
-        optimizer = tf.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
+        if legacy:
+            optimizer = tf.optimizers.legacy.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
+        else:
+            optimizer = tf.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
+
         return self.train_model(optimizer=optimizer, early_stop=early_stop, steps=steps)
 
     def train_model(self, optimizer, early_stop=EarlyStop(min_delta=0.001, patience=10), steps=1000):
@@ -386,6 +393,7 @@ class InverseCanopy(tf.Module):
         tf.print(f"[Best]  Step {early_stop.step_at_best_loss}: Loss = {early_stop.best_loss:.16f}\n"
               f"[Final] Step {step}: Loss = {loss.numpy():.16f}\n")
 
+        self.params = early_stop.best_params.deep_copy()
         self.summarize(show_plot=False)
 
     def train_model_with_profiling(self, optimizer, early_stop=EarlyStop(min_delta=0.001, patience=10), steps=1000):

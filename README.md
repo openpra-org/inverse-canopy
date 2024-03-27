@@ -1,5 +1,7 @@
 # InverseCanopy
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10888233.svg)](https://doi.org/10.5281/zenodo.10888233)
+
 Back-fit conditional/functional event probability distributions in an event tree to match target end-state
 frequencies.
 

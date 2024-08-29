@@ -28,12 +28,14 @@ To debug in IntelliJ Idea, open the 'Maven Projects' tool window (View
 version = "2024.03"
 
 project {
+    archived = true
 
     buildType(Build)
 }
 
 object Build : BuildType({
     name = "Build"
+    paused = true
 
     vcs {
         root(DslContext.settingsRoot)

@@ -1,7 +1,6 @@
 """
 main module for inverse_canopy, implementing the inverse UQ algorithm.
 """
-import time
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -9,7 +8,6 @@ from tensorflow_probability.python.internal import tf_keras
 from tf_keras.constraints import NonNeg
 
 from .lognormal_utils import compute_mu_sigma
-from .params import ModelInputs, TrainableParams, ModelParams
 from .early_stop import EarlyStop
 from .metrics import summarize_predicted_end_states, summarize_predicted_conditional_events
 
@@ -129,11 +127,6 @@ class InverseCanopy(tf.Module):
         dtype = self.dtype
         epsilon = self.epsilon
 
-        input_signature = [
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-        ]
-
         p_low = tf.math.log(tf.cast(0.0, dtype=dtype) + epsilon)
         p_high = tf.math.log(tf.cast(1.0, dtype=dtype))
 
@@ -148,10 +141,6 @@ class InverseCanopy(tf.Module):
 
     def _create_compute_y(self):
         y_sequences = self.targets['sequences']
-        input_signature = [
-            tf.TensorSpec(shape=[self.num_samples, self.num_conditional_events], dtype=self.dtype,
-                          name="sampled_conditional_probabilities"),
-        ]
 
         #@tf.function(input_signature=input_signature)
         def compute_y(sampled_vars):
@@ -174,8 +163,6 @@ class InverseCanopy(tf.Module):
         return compute_y
 
     def _create_compute_mu_sigma_from_sampled_distributions(self):
-        input_signature = [tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype)]
-
         #@tf.function(input_signature=input_signature)
         def compute_mu_sigma_from_sampled_distributions(y_dists):
             log_y = tf.math.log(y_dists + 1e-30)
@@ -187,11 +174,6 @@ class InverseCanopy(tf.Module):
 
     def _create_predict_end_state_likelihoods(self):
 
-        input_signature = [
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-        ]
-
         #@tf.function(input_signature=input_signature)
         def predict_end_state_likelihoods(mus, sigmas):
             predicted_samples = self.sample_from_distribution(mus, sigmas)  # num_samples
@@ -201,12 +183,6 @@ class InverseCanopy(tf.Module):
         return predict_end_state_likelihoods
 
     def _create_mae_loss(self):
-
-        input_signature = [
-            tf.TensorSpec(shape=(self.num_end_states, self.num_samples), dtype=self.dtype),
-            tf.TensorSpec(shape=(self.num_end_states, self.num_samples), dtype=self.dtype),
-        ]
-
         #@tf.function(input_signature=input_signature)
         def mae_loss(y_true, y_pred):
             loss = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
@@ -218,11 +194,6 @@ class InverseCanopy(tf.Module):
 
         log_y_true = self.targets['log_pdf']
         sigma_y_true = self.targets['sigmas']
-
-        input_signature = [
-            tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype),
-        ]
-
         #@tf.function(input_signature=input_signature)
         def normalized_relative_logarithmic_error(y_pred):
             log_y_pred, _, sigma_y_pred = self.compute_mu_sigma_from_sampled_distributions(y_pred)
@@ -235,12 +206,6 @@ class InverseCanopy(tf.Module):
         return normalized_relative_logarithmic_error
 
     def _create_normalized_relative_logarithmic_loss(self):
-
-        input_signature = [
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-        ]
-
         #@tf.function(input_signature=input_signature)
         def normalized_relative_logarithmic_loss(mus, sigmas):
             y_pred_pdf = self.predict_end_state_likelihoods(mus, sigmas)
@@ -252,11 +217,6 @@ class InverseCanopy(tf.Module):
     def _create_compute_mu_sigma(self):
 
         one = tf.cast(1.0, dtype=self.dtype)
-
-        input_signature = [
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-            tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
-        ]
 
         #@tf.function(input_signature=input_signature)
         def compute_mu_sigma(mean, std):
@@ -271,12 +231,6 @@ class InverseCanopy(tf.Module):
     def _create_compute_mean_std(self):
         one = tf.cast(1.0, dtype=self.dtype)
         two = tf.cast(2.0, dtype=self.dtype)
-
-        input_signature = [
-            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
-            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
-        ]
-
         #@tf.function(input_signature=input_signature)
         def compute_mean_std(mu, sigma):
             sigma_squared = tf.square(sigma)
@@ -287,11 +241,6 @@ class InverseCanopy(tf.Module):
         return compute_mean_std
 
     def _create_clip_mu_sigma(self):
-        input_signature = [
-            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
-            tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
-        ]
-
         constraints_mean = self.constraints_means
         constraints_std = self.constraints_stds
         dtype = self.dtype

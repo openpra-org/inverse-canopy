@@ -1,7 +1,5 @@
 import unittest
 import tensorflow as tf
-import numpy as np
-from scipy.stats import norm
 from inverse_canopy.lognormal_utils import compute_mu_sigma_from_5th_mean_95th
 
 class TestComputeMuSigmaFrom5thMean95th(unittest.TestCase):

@@ -3,11 +3,11 @@ import tensorflow as tf
 import numpy as np
 import os
 tunable = {
-    'num_samples': 10000,  # number of monte carlo samples
-    'learning_rate': 0.001,  # the gradient update rate
+    'num_samples': 2,  # number of monte carlo samples
+    'learning_rate': 0.1,  # the gradient update rate
     'dtype': tf.float64,  # use 64-bit floats
-    'epsilon': 1e-20,  # useful for avoiding log(0 + epsilon) type errors
-    'max_steps': 25000,  # maximum steps, regardless of convergence
+    'epsilon': 1e-30,  # useful for avoiding log(0 + epsilon) type errors
+    'max_steps': 5000,  # maximum steps, regardless of convergence
     'patience': 50,  # number of steps to wait before early stopping if the loss does not improve
     'initiating_event_frequency': 5.0e-1,
     'freeze_initiating_event': True,
@@ -252,7 +252,7 @@ if __name__ == '__main__':
     TF_XLA_FLAGS += " --tf_xla_deterministic_cluster_names=true --tf_xla_disable_strict_signature_checks=true"
     TF_XLA_FLAGS += " --tf_xla_persistent_cache_directory='./xla/cache/' --tf_xla_persistent_cache_read_only=false"
 
-    os.environ["TF_XLA_FLAGS"] = TF_XLA_FLAGS
+    #os.environ["TF_XLA_FLAGS"] = TF_XLA_FLAGS
 
     print('Devices: ', tf.config.list_physical_devices())
     model = InverseCanopy(conditional_events, end_states, tunable)

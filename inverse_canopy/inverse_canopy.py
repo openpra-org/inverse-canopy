@@ -5,7 +5,8 @@ import time
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
-from tensorflow.keras.constraints import NonNeg
+from tensorflow_probability.python.internal import tf_keras
+from tf_keras.constraints import NonNeg
 
 from .params import ModelInputs, TrainableParams, ModelParams
 from .early_stop import EarlyStop
@@ -70,8 +71,8 @@ class InverseCanopy(tf.Module):
             self.freeze_initiating_event = False
 
         use_float32 = True if self.dtype.name.title() == 'float32' else False
-        tf.keras.backend.set_floatx(str.lower(self.dtype.name.title()))
-        tf.keras.backend.set_epsilon(self.epsilon)
+        tf_keras.backend.set_floatx(str.lower(self.dtype.name.title()))
+        tf_keras.backend.set_epsilon(self.epsilon)
         tf.config.experimental.enable_tensor_float_32_execution(use_float32)
         tf.print(f"tunable initialized: dtype={self.dtype}, epsilon={self.epsilon}")
 
@@ -137,7 +138,7 @@ class InverseCanopy(tf.Module):
         p_low = tf.math.log(tf.cast(0.0, dtype=dtype) + epsilon)
         p_high = tf.math.log(tf.cast(1.0, dtype=dtype))
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def sample_from_distribution(mus, sigmas):
             sigmas_with_epsilon = sigmas + epsilon
             truncated_dist = tfp.distributions.TruncatedNormal(loc=mus, scale=sigmas_with_epsilon, low=p_low,
@@ -153,7 +154,7 @@ class InverseCanopy(tf.Module):
                           name="sampled_conditional_probabilities"),
         ]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def compute_y(sampled_vars):
             # Expand dimensions of `sampled_vars` for broadcasting
             expanded_sampled_vars = tf.expand_dims(sampled_vars, axis=1)  # Shape:[num_samples,1,num_conditional_events]
@@ -176,7 +177,7 @@ class InverseCanopy(tf.Module):
     def _create_compute_mu_sigma_from_sampled_distributions(self):
         input_signature = [tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype)]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def compute_mu_sigma_from_sampled_distributions(y_dists):
             log_y = tf.math.log(y_dists + 1e-30)
             mus = tf.math.reduce_mean(log_y, axis=1)
@@ -192,7 +193,7 @@ class InverseCanopy(tf.Module):
             tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
         ]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def predict_end_state_likelihoods(mus, sigmas):
             predicted_samples = self.sample_from_distribution(mus, sigmas)  # num_samples
             y_pred_pdf = self.compute_y(predicted_samples)  # y_sequences
@@ -207,7 +208,7 @@ class InverseCanopy(tf.Module):
             tf.TensorSpec(shape=(self.num_end_states, self.num_samples), dtype=self.dtype),
         ]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def mae_loss(y_true, y_pred):
             loss = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
             return loss
@@ -223,7 +224,7 @@ class InverseCanopy(tf.Module):
             tf.TensorSpec(shape=[self.num_end_states, self.num_samples], dtype=self.dtype),
         ]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def normalized_relative_logarithmic_error(y_pred):
             log_y_pred, _, sigma_y_pred = self.compute_mu_sigma_from_sampled_distributions(y_pred)
             pdf_losses = self.mae_loss(log_y_true, log_y_pred)
@@ -241,7 +242,7 @@ class InverseCanopy(tf.Module):
             tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
         ]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def normalized_relative_logarithmic_loss(mus, sigmas):
             y_pred_pdf = self.predict_end_state_likelihoods(mus, sigmas)
             nrle = self.normalized_relative_logarithmic_error(y_pred_pdf)
@@ -258,7 +259,7 @@ class InverseCanopy(tf.Module):
             tf.TensorSpec(shape=(self.num_conditional_events, ), dtype=self.dtype),
         ]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def compute_mu_sigma(mean, std):
             mean_squared = tf.square(mean)
             std_squared = tf.square(std)
@@ -277,7 +278,7 @@ class InverseCanopy(tf.Module):
             tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
         ]
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def compute_mean_std(mu, sigma):
             sigma_squared = tf.square(sigma)
             mean = tf.exp(mu + sigma_squared / two)
@@ -299,7 +300,7 @@ class InverseCanopy(tf.Module):
         neg_fifty = tf.cast(-50, dtype=dtype)
         six = tf.cast(6, dtype=dtype)
 
-        @tf.function(input_signature=input_signature)
+        #@tf.function(input_signature=input_signature)
         def clip_mu_sigma(mu, sigma):
             # Convert mu, sigma to mean, std and apply constraints
             mean, std = self.compute_mean_std(mu, sigma)
@@ -320,7 +321,7 @@ class InverseCanopy(tf.Module):
 
         return clip_mu_sigma
 
-    @tf.function
+    #@tf.function(jit_compile=True)
     def optimization_step(self, optimizer):
         with tf.GradientTape() as tape:
             mus, sigmas = self.params.spread()
@@ -361,59 +362,91 @@ class InverseCanopy(tf.Module):
 
         tf.random.set_seed(seed)
         np.random.seed(seed)
-        early_stop = EarlyStop(min_delta=min_improvement, patience=patience)
+        early_stop = EarlyStop(min_delta=min_improvement, patience=patience, dtype=self.dtype)
         if legacy:
-            optimizer = tf.optimizers.legacy.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
+            optimizer = tf_keras.optimizers.legacy.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
         else:
-            optimizer = tf.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
+            optimizer = tf_keras.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
 
         return self.train_model(optimizer=optimizer, early_stop=early_stop, steps=steps)
 
-    def train_model(self, optimizer, early_stop=EarlyStop(min_delta=0.001, patience=10), steps=1000):
-        loss = []
-        step = 0
+    @staticmethod
+    def _log_performance(step, loss, interval, start_time):
+        # Calculate elapsed time
+        elapsed_time = tf.timestamp() - start_time
+        # Calculate iterations per second
+        its_per_sec = tf.cond(
+            elapsed_time > 0.0,
+            lambda: tf.cast(interval, tf.float64) / elapsed_time,
+            lambda: tf.constant(float('inf'), dtype=tf.float64)
+        )
 
-        start_time = time.time()
+        # Convert values to strings with desired precision
+        #loss_str = tf.strings.as_string(loss, precision=16)
+        #step_str = tf.strings.as_string(step)
+        #its_per_sec_str = tf.strings.as_string(its_per_sec, precision=1)
+        #time_per_it_str = tf.strings.as_string(1.0 / its_per_sec, precision=1)
 
-        for step in range(steps):
-            loss = self.optimization_step(optimizer)
+        # Construct the performance message
+        performance = tf.cond(
+            its_per_sec >= 1.0,
+            lambda: tf.strings.join(["performing ", str(its_per_sec), " it/sec"]),
+            lambda: tf.strings.join(["consuming ", str((1.0 / its_per_sec)), " sec/it"])
+        )
+        # Print the performance message
+        tf.print("Step", step, ": Loss =", loss, ",", performance)
+        return tf.timestamp()
 
-            if step % 100 == 0:
-                elapsed_time = time.time() - start_time  # Calculate elapsed time
-                its_per_sec = 100.0 / elapsed_time
-                performance = f"performing {its_per_sec:.1f} it/sec" if its_per_sec >= 1 else f"consuming {(1.0/its_per_sec):.1f} sec/it"
-                tf.print(f"Step {step}: Loss = {loss:.16f}, {performance}")
-                start_time = time.time()  # Reset the start time for the next interval
+    def train_model(self, optimizer, early_stop, steps=1000):
+        interval = 100  # Number of steps between logging
+        total_steps = tf.constant(steps, dtype=tf.int32)
+        steps_done = tf.Variable(0, dtype=tf.int32)
+        start_time = tf.Variable(0.0, dtype=tf.float64)
+        last_time = tf.Variable(0.0, dtype=tf.float64)
 
-            early_stop(current_loss=loss.numpy(), step=step, params=self.params)
-            if early_stop.should_stop:
-                tf.print(f"No improvement since Step {step - early_stop.patience + 1}, early stopping.")
-                break
+        # Compiled function with XLA
+        @tf.function(jit_compile=True)
+        def optimization_steps(num_steps):
+            last_loss = tf.constant(0.0, dtype=self.dtype)
+            for _ in tf.range(num_steps):
+                last_loss = self.optimization_step(optimizer)
+            return last_loss
 
-        tf.print(f"[Best]  Step {early_stop.step_at_best_loss}: Loss = {early_stop.best_loss:.16f}\n"
-              f"[Final] Step {step}: Loss = {loss.numpy():.16f}\n")
+        # Training loop without XLA, but still in graph mode
+        @tf.function(jit_compile=False)
+        def train_loop():
+            start_time.assign(tf.timestamp())
+            last_time.assign(tf.timestamp())
+            steps_done.assign(0)
+            early_stop.best_loss.assign(float('inf'))
+            early_stop.epochs_since_improvement.assign(0)
+            early_stop.should_stop.assign(False)
+            early_stop.step_at_best_loss.assign(-1)
 
-        self.params = early_stop.best_params.deep_copy()
-        self.summarize(show_plot=False)
+            loss = tf.constant(float('inf'), dtype=self.dtype)
 
-    def train_model_with_profiling(self, optimizer, early_stop=EarlyStop(min_delta=0.001, patience=10), steps=1000):
-        log_dir = "./logs/train_data"
-        try:
-            loss = []
-            step = 0
-            tf.profiler.experimental.start(log_dir)
-            for step in range(steps):
-                loss = self.optimization_step(optimizer)
-                early_stop(current_loss=loss.numpy(), step=step, params=self.params)
-                if early_stop.should_stop:
-                    tf.print(f"No improvement since Step {step - early_stop.patience + 1}, early stopping.")
-                    break
-        finally:
-            tf.profiler.experimental.stop()
+            while tf.logical_and(steps_done < total_steps,
+                                 tf.logical_not(early_stop.should_stop)):
+                steps_to_run = tf.minimum(interval, total_steps - steps_done)
+                loss = optimization_steps(steps_to_run)
+                steps_done.assign_add(steps_to_run)
 
-        tf.print(f"[Best]  Step {early_stop.step_at_best_loss}: Loss = {early_stop.best_loss:.16f}\n"
-                 f"[Final] Step {step}: Loss = {loss.numpy():.16f}\n")
-        self.summarize(show_plot=False)
+                # Early stopping logic
+                early_stop(current_loss=loss, step=steps_done)
+
+                # Print statistics
+                now = tf.timestamp()
+                elapsed_time = now - last_time
+                total_elapsed_time = now - start_time
+                its_per_sec = tf.cast(steps_done, tf.float64) / total_elapsed_time
+                interval_its_per_sec = tf.cast(steps_to_run, tf.float64) / elapsed_time
+                tf.print("Step", steps_done, ": Loss =", loss,
+                         ", Avg Iterations per second =", its_per_sec,
+                         ", Interval Iterations per second =", interval_its_per_sec)
+                last_time.assign(now)
+
+        # Start the training loop
+        train_loop()
 
     def summarize(self, show_plot=True, show_metrics=True, scale_by_initiating_event_frequency=True):
         summarize_predicted_end_states(self, show_plot=show_plot, show_metrics=show_metrics)

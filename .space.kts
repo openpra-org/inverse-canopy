@@ -1,10 +1,10 @@
-job("InverseCanopy CI") {
+job("inverse-canopy") {
 
     requirements {
         workerTags("swarm-worker")
     }
 
-    val registry = "packages.space.openpra.org/p/openpra/containers/"
+    val registry = "packages-space.openpra.org/p/openpra/containers/"
     val image = "inverse-canopy"
     val remote = "$registry$image"
 
@@ -30,36 +30,45 @@ job("InverseCanopy CI") {
     }
   }
 
-    host("Build & Test") {
-
-      shellScript("build"){
+    host("build-image") {
+      shellScript {
         interpreter = "/bin/bash"
         content = """
-                          docker build --tag="$remote:{{ branchSlug }}" .
-                          """
+                        docker pull $remote:{{ branchSlug }} || true
+                        docker build --tag="$remote:{{ branchSlug }}" --tag="$remote:ci-{{ run:number }}-{{ branchSlug }}" .
+                        docker push "$remote:ci-{{ run:number }}-{{ branchSlug }}"
+                        """
       }
+    }
 
-      shellScript("tests"){
-        interpreter = "/bin/bash"
-        content = """
-                          docker run --rm "$remote:{{ branchSlug }}" pytest
+    parallel {
+
+        host("Tests") {
+            shellScript("pytest") {
+                interpreter = "/bin/bash"
+                content = """
+                          docker run --rm "$remote:ci-{{ run:number }}-{{ branchSlug }}" pytest -n 4
                           """
-      }
+            }
+        }
 
-      shellScript("coverage"){
-        interpreter = "/bin/bash"
-        content = """
-                          docker run --rm "$remote:{{ branchSlug }}" pytest --cov
+        host("Coverage") {
+            shellScript("pytest --cov") {
+                interpreter = "/bin/bash"
+                content = """
+                          docker run --rm "$remote:ci-{{ run:number }}-{{ branchSlug }}" pytest --cov -n 4
                           """
-      }
+            }
+        }
 
-      shellScript("lint"){
-        interpreter = "/bin/bash"
-        content = """
-                          docker run --rm "$remote:{{ branchSlug }}" pylint /app/inverse_canopy || exit 0
+        host("Lint & Format") {
+            shellScript("ruff check") {
+                interpreter = "/bin/bash"
+                content = """
+                          docker run --rm "$remote:ci-{{ run:number }}-{{ branchSlug }}" ruff check
                           """
-      }
-
+            }
+        }
     }
 
     host("Publish") {
@@ -69,13 +78,11 @@ job("InverseCanopy CI") {
       env["USER"] = "{{ project:PYPI_USER_TOKEN }}"
       env["PASSWORD"] = "{{ project:PYPI_PASSWORD_TOKEN }}"
 
-      shellScript("build & push"){
-        interpreter = "/bin/bash"
-        content = """
-                          docker build --tag="$remote:{{ branchSlug }}" .
-                          docker run --rm "$remote:{{ branchSlug }}" /bin/bash -c "python setup.py sdist bdist_wheel && twine upload dist/* -u ${'$'}USER -p ${'$'}PASSWORD"
-                          docker rmi "$remote:{{ branchSlug }}"
-                          """
+      shellScript("build & package") {
+            interpreter = "/bin/bash"
+            content = """
+                      docker run --rm "$remote:ci-{{ run:number }}-{{ branchSlug }}" /bin/bash -c "python -m build && twine upload dist/* -u ${'$'}USER -p ${'$'}PASSWORD"
+                      """
       }
     }
 }

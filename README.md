@@ -14,7 +14,7 @@ Below is a step-by-step example of how to use `inverse-canopy` in your project.
 First, you need to import `InverseCanopy` from `inverse_canopy`, along with `tensorflow` and `numpy`.
 
 ```shell
-!pip install inverse-canopy==0.0.21
+!pip install inverse-canopy
 ```
 
 Alternatively, you can install the CUDA or Metal accelerated versions. No code changes are required as long as the
@@ -23,12 +23,12 @@ appropriate version is installed.
 ```shell
 # optionally, first check if an nvidia GPU is available
 !nvidia-smi
-!pip install inverse-canopy[cuda]==0.0.21
+!pip install inverse-canopy[cuda]
 ```
 
 #### inverse-canopy Metal [macOS]
 ```shell
-!pip install inverse-canopy[metal]==0.0.21
+!pip install inverse-canopy[metal]
 ```
 
 ```python

@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inverse-canopy"
+version = "0.0.23"
+description = "Tensorflow based library for back-fitting event tree conditional/functional event probability distributions to match target end-state frequencies."
+readme = "README.md"
+authors = [{name = "Arjun Earthperson", email = "a.earthperson@openpra.org"}]
+license = {file = "LICENSE"}
+keywords = ["tensorflow", "probability", "event tree", "fault tree", "scientific"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed"
+]
+
+dependencies = [
+"tensorflow>=2.17.0",
+"tensorflow-probability>=0.24.0",
+"tf-keras>=2.17.0",
+"numpy>=1.26.4",
+"scipy>=1.14.0",
+"matplotlib>=3.9.2"
+]
+
+
+[project.optional-dependencies]
+cuda = [
+    "tensorflow[and-cuda]"
+]
+metal = [
+    "tensorflow==2.13.1",
+    "tensorflow-metal==1.0.0",
+    "tensorflow-probability==0.21.0"
+]
+test = [
+    "pytest-xdist",
+    "pytest",
+    "pytest-cov",
+    "ruff"
+]
+dev = [
+    "pytest-xdist",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "twine"
+]
+
+[project.urls]
+Homepage = "https://openpra.org"
+Repository = "https://github.com/openpra-org/inverse-canopy"
+Documentation = "https://docs.openpra.org"
+
+
+[project.scripts]
+
+[tool.pytest.ini_options]
+addopts = "-ra -v --strict-markers"
+testpaths = [
+    "tests"
+]
+
+
+[tool.setuptools]
+packages = ["inverse_canopy"]

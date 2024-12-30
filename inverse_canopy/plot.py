@@ -43,12 +43,12 @@ def subplot_pdfs(y_pred_pdf, y_target_pdf, event_names, title='', save=False, al
                     ax.fill_betweenx([0, density.max()], p05, p95, color=colors[i], alpha=0.2)
                 except Exception:
                     ax.axvline(x=mean, linestyle='-', label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}",
-                               color=colors[i],
+                               color=colors[i], linewidth=4,
                                alpha=1.0)
                     ax.fill_betweenx((0, 1), p05, p95, color=colors[i], alpha=0.2)
             else:
                 ax.axvline(x=mean, linestyle='-', label=f"{event_names[i]}: {mean:.2e} ± {std:.2e}", color=colors[i],
-                           alpha=1.0)
+                           alpha=1.0, linewidth=4)
                 ax.fill_betweenx((0, 1), p05, p95, color=colors[i], alpha=0.2)
         if title != '':
             ax.set_title(title_)

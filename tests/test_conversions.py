@@ -1,7 +1,5 @@
 import unittest
 import tensorflow as tf
-from inverse_canopy import compute_mu_sigma, compute_mean_std, compute_mean_error_factor_from_mu_sigma, \
-    compute_5th_mean_95th_from_mu_sigma, compute_mu_sigma_from_5th_mean_95th
 
 
 class TestLogNormalParameters(unittest.TestCase):

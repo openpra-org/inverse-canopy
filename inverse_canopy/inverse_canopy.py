@@ -8,19 +8,19 @@ import tensorflow_probability as tfp
 from tensorflow_probability.python.internal import tf_keras
 from tf_keras.constraints import NonNeg
 
+from .lognormal_utils import compute_mu_sigma
 from .params import ModelInputs, TrainableParams, ModelParams
 from .early_stop import EarlyStop
 from .metrics import summarize_predicted_end_states, summarize_predicted_conditional_events
 
 
 def initialize_conditional_events(events, dtype, freeze_initiating_event=False):
-    bounds: ModelInputs = ModelInputs()
-    bounds['means'] = tf.constant([events['bounds']['mean']['min'], events['bounds']['mean']['max']], dtype=dtype)
-    bounds['stds'] = tf.constant([events['bounds']['std']['min'], events['bounds']['std']['max']], dtype=dtype)
+    bounds = {
+        "means": tf.constant([events['bounds']['mean']['min'], events['bounds']['mean']['max']], dtype=dtype),
+        "stds": tf.constant([events['bounds']['std']['min'], events['bounds']['std']['max']], dtype=dtype)
+    }
 
     num_events = len(events['names'])
-    initial: ModelInputs = ModelInputs()
-
     mask_mus = [1 for _ in range(0, num_events)]
     mask_sigmas = [1 for _ in range(0, num_events)]
 
@@ -34,13 +34,14 @@ def initialize_conditional_events(events, dtype, freeze_initiating_event=False):
         mask_mus[0] = 0
         mask_sigmas[0] = 0
 
-    initial['means'] = tf.constant(initial_means, dtype=dtype)
-    initial['stds'] = tf.constant(initial_stds, dtype=dtype)
-
-    mask: TrainableParams = TrainableParams()
-    mask['mus'] = tf.constant(mask_mus, dtype=dtype)
-    mask['sigmas'] = tf.constant(mask_sigmas, dtype=dtype)
-
+    initial = {
+        "means": tf.constant(initial_means, dtype=dtype),
+        "stds": tf.constant(initial_stds, dtype=dtype)
+    }
+    mask = {
+        "mus": tf.constant(mask_mus, dtype=dtype),
+        "sigmas": tf.constant(mask_sigmas, dtype=dtype)
+    }
     return bounds, initial, mask
 
 
@@ -82,19 +83,17 @@ class InverseCanopy(tf.Module):
         self.num_conditional_events = len(self.conditional_events['names'])
 
         # initialize internal model params
-        self.params: ModelParams = initial_guess.to_musigma(dtype=self.dtype)
-        self.params['mus'] = tf.Variable(self.params['mus'], dtype=self.dtype)
-        self.params['sigmas'] = tf.Variable(self.params['sigmas'], dtype=self.dtype, constraint=NonNeg())
+        mus, sigmas = compute_mu_sigma(initial_guess['means'], initial_guess['stds'], dtype=self.dtype)
+        self.params_mus = tf.Variable(mus, dtype=self.dtype)
+        self.params_sigmas = tf.Variable(sigmas, dtype=self.dtype, constraint=NonNeg())
 
         # set the trainable boolean masks
-        self.trainable: TrainableParams = trainable_mask
-        self.trainable['mus'] = tf.constant(self.trainable['mus'], dtype=self.dtype)
-        self.trainable['sigmas'] = tf.constant(self.trainable['sigmas'], dtype=self.dtype)
+        self.trainable_mask_mus = tf.constant(trainable_mask["mus"], dtype=self.dtype)
+        self.trainable_mask_sigmas = tf.constant(trainable_mask["sigmas"], dtype=self.dtype)
 
         # clipping constraints on mean, std
-        self.constraints = bounds
-        self.constraints['means'] = tf.constant(self.constraints['means'], dtype=self.dtype)
-        self.constraints['stds'] = tf.constant(self.constraints['stds'], dtype=self.dtype)
+        self.constraints_means = tf.constant(bounds["means"], dtype=self.dtype)
+        self.constraints_stds = tf.constant(bounds["stds"], dtype=self.dtype)
 
         # initialize end states related parameters
         self.end_states = end_states
@@ -293,8 +292,8 @@ class InverseCanopy(tf.Module):
             tf.TensorSpec(shape=(self.num_conditional_events,), dtype=self.dtype),
         ]
 
-        constraints_mean = self.constraints['means']
-        constraints_std = self.constraints['stds']
+        constraints_mean = self.constraints_means
+        constraints_std = self.constraints_stds
         dtype = self.dtype
         epsilon = self.epsilon
         neg_fifty = tf.cast(-50, dtype=dtype)
@@ -324,36 +323,35 @@ class InverseCanopy(tf.Module):
     #@tf.function(jit_compile=True)
     def optimization_step(self, optimizer):
         with tf.GradientTape() as tape:
-            mus, sigmas = self.params.spread()
-            loss = self.normalized_relative_logarithmic_loss(mus, sigmas)
+            loss = self.normalized_relative_logarithmic_loss(self.params_mus, self.params_sigmas)
 
         # Compute gradients with respect to model parameters that are variables
-        gradients = tape.gradient(loss, [self.params['mus'], self.params['sigmas']])
+        gradients = tape.gradient(loss, [self.params_mus, self.params_sigmas])
 
         # # Prepare (gradient, variable) pairs, applying the mask to each gradient
         grads_and_vars = []
 
         # mu masks
-        masked_grad_mus = gradients[0] * tf.cast(self.trainable['mus'], dtype=gradients[0].dtype)
-        grads_and_vars.append((masked_grad_mus, self.params['mus']))
+        masked_grad_mus = gradients[0] * tf.cast(self.trainable_mask_mus, dtype=gradients[0].dtype)
+        grads_and_vars.append((masked_grad_mus, self.params_mus))
 
         # sigma masks
-        masked_grad_sigmas = gradients[1] * tf.cast(self.trainable['sigmas'], dtype=gradients[1].dtype)
-        grads_and_vars.append((masked_grad_sigmas, self.params['sigmas']))
+        masked_grad_sigmas = gradients[1] * tf.cast(self.trainable_mask_sigmas, dtype=gradients[1].dtype)
+        grads_and_vars.append((masked_grad_sigmas, self.params_sigmas))
 
         # Apply the masked gradients to the optimizer
         optimizer.apply_gradients(grads_and_vars)
 
-        clipped_mu, clipped_sigma = self.clip_mu_sigma(self.params['mus'], self.params['sigmas'])
-        (self.params['mus']).assign(clipped_mu)
-        (self.params['sigmas']).assign(clipped_sigma)
+        clipped_mu, clipped_sigma = self.clip_mu_sigma(self.params_mus, self.params_sigmas)
+        self.params_mus.assign(clipped_mu)
+        self.params_sigmas.assign(clipped_sigma)
 
         return loss
 
     """
     end-user helper function
     """
-    def fit(self, learning_rate=0.1, patience=10, min_improvement=0.001, steps=1000, seed=372, legacy=False):
+    def fit(self, learning_rate=0.1, patience=10, min_improvement=0.001, steps=1000, seed=372):
         tf.print(f"learning_rate: {learning_rate},"
                  f"patience: {patience},"
                  f"min_improvement: {min_improvement},"
@@ -362,40 +360,9 @@ class InverseCanopy(tf.Module):
 
         tf.random.set_seed(seed)
         np.random.seed(seed)
-        early_stop = EarlyStop(min_delta=min_improvement, patience=patience, dtype=self.dtype)
-        if legacy:
-            optimizer = tf_keras.optimizers.legacy.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
-        else:
-            optimizer = tf_keras.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
-
+        early_stop = EarlyStop(min_delta=min_improvement, patience=patience, dtype=self.dtype, mus=self.params_mus, sigmas=self.params_sigmas)
+        optimizer = tf_keras.optimizers.Adam(learning_rate=learning_rate, amsgrad=False, epsilon=self.epsilon)
         return self.train_model(optimizer=optimizer, early_stop=early_stop, steps=steps)
-
-    @staticmethod
-    def _log_performance(step, loss, interval, start_time):
-        # Calculate elapsed time
-        elapsed_time = tf.timestamp() - start_time
-        # Calculate iterations per second
-        its_per_sec = tf.cond(
-            elapsed_time > 0.0,
-            lambda: tf.cast(interval, tf.float64) / elapsed_time,
-            lambda: tf.constant(float('inf'), dtype=tf.float64)
-        )
-
-        # Convert values to strings with desired precision
-        #loss_str = tf.strings.as_string(loss, precision=16)
-        #step_str = tf.strings.as_string(step)
-        #its_per_sec_str = tf.strings.as_string(its_per_sec, precision=1)
-        #time_per_it_str = tf.strings.as_string(1.0 / its_per_sec, precision=1)
-
-        # Construct the performance message
-        performance = tf.cond(
-            its_per_sec >= 1.0,
-            lambda: tf.strings.join(["performing ", str(its_per_sec), " it/sec"]),
-            lambda: tf.strings.join(["consuming ", str((1.0 / its_per_sec)), " sec/it"])
-        )
-        # Print the performance message
-        tf.print("Step", step, ": Loss =", loss, ",", performance)
-        return tf.timestamp()
 
     def train_model(self, optimizer, early_stop, steps=1000):
         interval = 100  # Number of steps between logging
@@ -432,7 +399,7 @@ class InverseCanopy(tf.Module):
                 steps_done.assign_add(steps_to_run)
 
                 # Early stopping logic
-                early_stop(current_loss=loss, step=steps_done)
+                early_stop(current_loss=loss, step=steps_done, mus=self.params_mus, sigmas=self.params_sigmas)
 
                 # Print statistics
                 now = tf.timestamp()

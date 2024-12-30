@@ -73,7 +73,8 @@ def summarize_predicted_conditional_events(model, scale_initiating_event_frequen
     Returns:
         None
     """
-    predicted_mus, predicted_sigmas = model.params.spread()
+    predicted_mus = model.params_mus
+    predicted_sigmas = model.params_sigmas
     predicted_samples = model.sample_from_distribution(predicted_mus, predicted_sigmas)
     p05, mean, p95 = compute_metrics(predicted_samples)
     conditional_events = model.conditional_events['names']
@@ -96,7 +97,8 @@ def summarize_predicted_end_states(model, show_plot=True, show_metrics=True, sca
     Returns:
         None
     """
-    predicted_mus, predicted_sigmas = model.params.spread()
+    predicted_mus = model.params_mus
+    predicted_sigmas = model.params_sigmas
     y_pred_pdf = model.predict_end_state_likelihoods(predicted_mus, predicted_sigmas)
     y_obs_pdf = model.targets['pdf']
 

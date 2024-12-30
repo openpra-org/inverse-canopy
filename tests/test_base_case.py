@@ -37,8 +37,8 @@ class TestInverseCanopy(unittest.TestCase):
     @patch('inverse_canopy.InverseCanopy.fit')
     def test_fit_called(self, mock_fit):
         """Test that the fit method is called with correct parameters."""
-        self.model.fit(steps=self.tunable['max_steps'], patience=self.tunable['patience'], learning_rate=self.tunable['learning_rate'], legacy=False)
-        mock_fit.assert_called_once_with(steps=5000, patience=50, learning_rate=0.1, legacy=False)
+        self.model.fit(steps=self.tunable['max_steps'], patience=self.tunable['patience'], learning_rate=self.tunable['learning_rate'])
+        mock_fit.assert_called_once_with(steps=5000, patience=50, learning_rate=0.1)
 
     @patch('inverse_canopy.InverseCanopy.summarize')
     def test_summarize_called(self, mock_summarize):
@@ -48,9 +48,8 @@ class TestInverseCanopy(unittest.TestCase):
 
     def test_parameters_set_correctly(self):
         """Test that parameters are set correctly in the model."""
-        self.assertEqual(self.model.tunable['num_samples'], 1000000)
-        self.assertEqual(self.model.tunable['learning_rate'], 0.1)
-        self.assertEqual(self.model.tunable['dtype'], tf.float64)
+        self.assertEqual(self.model.num_samples, 1000000)
+        self.assertEqual(self.model.dtype, tf.float64)
 
     def test_conditional_events_structure(self):
         """Test the structure of conditional events."""

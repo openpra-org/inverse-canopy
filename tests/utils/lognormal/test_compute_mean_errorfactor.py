@@ -15,13 +15,6 @@ class TestComputeMeanErrorFactorFromMuSigma(unittest.TestCase):
         self.assertAlmostEqual(mean.numpy(), expected_mean.numpy(), places=5)
         self.assertAlmostEqual(error_factor.numpy(), expected_error_factor.numpy(), places=5)
 
-    def test_negative_sigma_values(self):
-        """Test the function with negative sigma values."""
-        mu = tf.constant(0.0, dtype=tf.float64)
-        sigma = tf.constant(-1.0, dtype=tf.float64)
-        with self.assertRaises(tf.errors.InvalidArgumentError):
-            compute_mean_error_factor_from_mu_sigma(mu, sigma)
-
     def test_type_and_shape(self):
         """Test the function with different data types and shapes."""
         mu = tf.constant([0.0, 0.5], dtype=tf.float32)

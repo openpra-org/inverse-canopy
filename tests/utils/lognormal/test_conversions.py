@@ -52,17 +52,15 @@ class TestLognormalUtils(unittest.TestCase):
         sigma = tf.constant(0.25, dtype=tf.float64)
         mean, error_factor = compute_mean_error_factor_from_mu_sigma(mu, sigma)
 
-        # Derive std from mean and error factor
+        # Compute std from mean and sigma using the correct formula
         one = tf.cast(1.0, dtype=tf.float64)
-        z = tf.cast(1.6448536269514722, dtype=tf.float64)  # Approximation for 95% confidence interval of normal distribution
-        std = mean * (tf.exp(z * sigma) - one) / z
+        std = mean * tf.sqrt(tf.exp(sigma ** 2) - one)
 
         # Compute mu and sigma back from mean and std
         mu_back, sigma_back = compute_mu_sigma(mean, std)
 
         self.assertAlmostEqual(mu.numpy(), mu_back.numpy(), places=5)
         self.assertAlmostEqual(sigma.numpy(), sigma_back.numpy(), places=5)
-
 
 if __name__ == '__main__':
     unittest.main()

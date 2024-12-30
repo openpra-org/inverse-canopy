@@ -11,8 +11,6 @@ class ModelOutputs(dict):
     """
     A class to represent the outputs of a model, including means and standard deviations.
     """
-    means: tf.Tensor
-    stds: tf.Tensor
 
     def __init__(self, means=None, stds=None):
         """
@@ -27,8 +25,8 @@ class ModelOutputs(dict):
             stds = []
         if means is None:
             means = []
-        self['means'] = means
-        self['stds'] = stds
+        self['means']: tf.Tensor = means
+        self['stds']: tf.Tensor = stds
 
     def to_musigma(self, dtype=tf.float64) -> 'ModelParams':
         """
@@ -78,8 +76,6 @@ class ModelParams(dict):
     """
     A class to represent the parameters of a model, including mus and sigmas.
     """
-    mus: tf.Variable
-    sigmas: tf.Variable
 
     def __init__(self, mus=None, sigmas=None):
         """
@@ -94,8 +90,8 @@ class ModelParams(dict):
             sigmas = []
         if mus is None:
             mus = []
-        self['mus'] = mus
-        self['sigmas'] = sigmas
+        self['mus']: tf.Variable = mus
+        self['sigmas']: tf.Variable = sigmas
 
     def validate(self):
         """
@@ -145,7 +141,7 @@ class ModelParams(dict):
 
     def __str__(self):
         ret_str = ""
-        for i, (mu, sigma) in enumerate(zip(self['mus'].numpy(), self['sigmas'].numpy())):
+        for i, (mu, sigma) in enumerate(zip(self['mus'], self['sigmas'])):
             ret_str += f"[{i}]: mu={mu:.2e}, sigma={sigma:.2e}\n"
         return ret_str
 
@@ -154,8 +150,6 @@ class TrainableParams(ModelParams):
     """
     A class to represent trainable parameters of a model, inheriting from ModelParams.
     """
-    mus: tf.constant
-    sigmas: tf.constant
 
     def __init__(self, mus=None, sigmas=None):
         """
@@ -170,8 +164,8 @@ class TrainableParams(ModelParams):
             sigmas = []
         if mus is None:
             mus = []
-        self['mus'] = mus
-        self['sigmas'] = sigmas
+        self['mus']: tf.constant = mus
+        self['sigmas']: tf.constant = sigmas
 
     def __repr__(self):
         mus_str = ", ".join([f"{m:.2e}" for m in self['mus'].numpy()])

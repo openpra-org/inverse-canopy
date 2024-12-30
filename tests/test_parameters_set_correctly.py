@@ -3,6 +3,9 @@ from inverse_canopy import InverseCanopy
 import tensorflow as tf
 import numpy as np
 
+from inverse_canopy.lognormal_utils import compute_mu_sigma
+
+
 class TestInverseCanopy(unittest.TestCase):
     def setUp(self):
         self.conditional_events = {
@@ -40,14 +43,15 @@ class TestInverseCanopy(unittest.TestCase):
         # Check if the bounds and initial guesses are set correctly
         expected_means_bounds = tf.constant([1e-14, 1.00], dtype=tf.float64)
         expected_stds_bounds = tf.constant([1e-10, 1e8], dtype=tf.float64)
-        self.assertTrue(tf.reduce_all(tf.equal(self.model.constraints['means'], expected_means_bounds)))
-        self.assertTrue(tf.reduce_all(tf.equal(self.model.constraints['stds'], expected_stds_bounds)))
+        self.assertTrue(tf.reduce_all(tf.equal(self.model.constraints_means, expected_means_bounds)))
+        self.assertTrue(tf.reduce_all(tf.equal(self.model.constraints_stds, expected_stds_bounds)))
 
         # Check initial means and stds
         expected_initial_means = tf.constant([1] + [5e-1] * (len(self.conditional_events['names']) - 1), dtype=tf.float64)
         expected_initial_stds = tf.constant([1e-10] + [1e8] * (len(self.conditional_events['names']) - 1), dtype=tf.float64)
-        self.assertTrue(tf.reduce_all(tf.equal(self.model.params['mus'], expected_initial_means)))
-        self.assertTrue(tf.reduce_all(tf.equal(self.model.params['sigmas'], expected_initial_stds)))
+        expected_mus, expected_sigmas = compute_mu_sigma(expected_initial_means, expected_initial_stds, dtype=tf.float64)
+        self.assertTrue(tf.reduce_all(tf.equal(self.model.params_mus, expected_mus)))
+        self.assertTrue(tf.reduce_all(tf.equal(self.model.params_sigmas, expected_sigmas)))
 
 if __name__ == '__main__':
     unittest.main()

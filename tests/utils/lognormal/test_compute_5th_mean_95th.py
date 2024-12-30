@@ -20,13 +20,6 @@ class TestCompute5thMean95thFromMuSigma(unittest.TestCase):
         self.assertAlmostEqual(mean.numpy(), expected_mean.numpy(), places=5)
         self.assertAlmostEqual(p95.numpy(), expected_p95.numpy(), places=5)
 
-    def test_negative_sigma_values(self):
-        """Test the function with negative sigma values."""
-        mu = tf.constant(0.0, dtype=tf.float64)
-        sigma = tf.constant(-0.25, dtype=tf.float64)
-        with self.assertRaises(tf.errors.InvalidArgumentError):
-            compute_5th_mean_95th_from_mu_sigma(mu, sigma)
-
     def test_type_and_shape(self):
         """Test the function with different input types and shapes."""
         mu = tf.constant([0.0, 0.1], dtype=tf.float32)

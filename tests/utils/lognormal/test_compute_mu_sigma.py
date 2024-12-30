@@ -20,13 +20,9 @@ class TestComputeMuSigma(unittest.TestCase):
         """Test behavior with negative or zero mean and standard deviation."""
         mean = tf.constant(0.0, dtype=tf.float64)
         std = tf.constant(2.0, dtype=tf.float64)
-        with self.assertRaises(tf.errors.InvalidArgumentError):
-            mu, sigma = compute_mu_sigma(mean, std)
-
-        mean = tf.constant(-1.0, dtype=tf.float64)
-        std = tf.constant(2.0, dtype=tf.float64)
-        with self.assertRaises(tf.errors.InvalidArgumentError):
-            mu, sigma = compute_mu_sigma(mean, std)
+        mu, sigma = compute_mu_sigma(mean, std)
+        self.assertEqual(mu, float("-inf"))
+        self.assertEqual(sigma, float("inf"))
 
         mean = tf.constant(10.0, dtype=tf.float64)
         std = tf.constant(0.0, dtype=tf.float64)

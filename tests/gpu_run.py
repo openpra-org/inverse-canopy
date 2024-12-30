@@ -1,13 +1,13 @@
 from inverse_canopy import InverseCanopy
 import tensorflow as tf
 import numpy as np
-
+import os
 tunable = {
-    'num_samples': 1000000,  # number of monte carlo samples
+    'num_samples': 10000,  # number of monte carlo samples
     'learning_rate': 0.001,  # the gradient update rate
-    'dtype': tf.float32,  # use 64-bit floats
-    'epsilon': 1e-30,  # useful for avoiding log(0 + epsilon) type errors
-    'max_steps': 5000,  # maximum steps, regardless of convergence
+    'dtype': tf.float64,  # use 64-bit floats
+    'epsilon': 1e-20,  # useful for avoiding log(0 + epsilon) type errors
+    'max_steps': 25000,  # maximum steps, regardless of convergence
     'patience': 50,  # number of steps to wait before early stopping if the loss does not improve
     'initiating_event_frequency': 5.0e-1,
     'freeze_initiating_event': True,
@@ -245,6 +245,15 @@ end_states = {
 
 
 if __name__ == '__main__':
+    os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
+
+    TF_XLA_FLAGS = "--tf_xla_enable_lazy_compilation=false --tf_xla_auto_jit=2"
+    TF_XLA_FLAGS += " --tf_mlir_enable_mlir_bridge=true --tf_mlir_enable_convert_control_to_data_outputs_pass=true --tf_mlir_enable_multiple_local_cpu_devices=true"
+    TF_XLA_FLAGS += " --tf_xla_deterministic_cluster_names=true --tf_xla_disable_strict_signature_checks=true"
+    TF_XLA_FLAGS += " --tf_xla_persistent_cache_directory='./xla/cache/' --tf_xla_persistent_cache_read_only=false"
+
+    os.environ["TF_XLA_FLAGS"] = TF_XLA_FLAGS
+
     print('Devices: ', tf.config.list_physical_devices())
     model = InverseCanopy(conditional_events, end_states, tunable)
     model.fit(steps=tunable['max_steps'], patience=tunable['patience'], learning_rate=tunable['learning_rate'])

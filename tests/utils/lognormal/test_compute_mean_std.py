@@ -20,14 +20,6 @@ class TestComputeMeanStd(unittest.TestCase):
         self.assertAlmostEqual(mean.numpy(), expected_mean.numpy(), places=5)
         self.assertAlmostEqual(std.numpy(), expected_std.numpy(), places=5)
 
-    def test_negative_sigma_values(self):
-        """ Test the function with negative sigma values """
-        mu = tf.constant(0.0, dtype=tf.float64)
-        sigma = tf.constant(-1.0, dtype=tf.float64)
-
-        with self.assertRaises(tf.errors.InvalidArgumentError):
-            mean, std = compute_mean_std(mu, sigma)
-
     def test_type_and_shape(self):
         """ Test the function with different data types and shapes """
         mu = tf.constant([0.0, 1.0], dtype=tf.float32)

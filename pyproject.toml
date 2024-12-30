@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inverse-canopy"
-version = "0.0.23"
+version = "0.0.22"
 description = "Tensorflow based library for back-fitting event tree conditional/functional event probability distributions to match target end-state frequencies."
 readme = "README.md"
 authors = [{name = "Arjun Earthperson", email = "a.earthperson@openpra.org"}]
 license = {file = "LICENSE"}
+requires-python = ">=3.10"
 keywords = ["tensorflow", "probability", "event tree", "fault tree", "scientific"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -50,6 +51,7 @@ test = [
     "ruff"
 ]
 dev = [
+    "build",
     "pytest-xdist",
     "pytest",
     "pytest-cov",

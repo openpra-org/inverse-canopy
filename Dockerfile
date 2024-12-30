@@ -1,5 +1,5 @@
-# Use the official Python 3.11 image as a base image
-FROM python:3.11
+# Use the official Python 3.10 image as a base image
+FROM python:3.10
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -17,5 +17,5 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     apt update && \
     apt install -y --no-install-recommends build-essential &&\
     pip install --upgrade pip twine wheel setuptools &&\
-    pip install -e .[dev] && \
+    pip install -e ".[dev]" && \
     rm -rf /var/lib/apt/lists/*
